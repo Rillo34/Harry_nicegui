@@ -8,6 +8,9 @@ from pydantic import parse_obj_as
 
 class UploadController:
     def __init__(self):
+        self.job_id = ""
+        self.job_description = ""
+        self.customer = ""
         self.requirements = []
         self.uploaded_job_description = None  # ska vara NiceGUI UploadedFile
         self.uploaded_cvs = []  # lista av UploadedFile
@@ -26,7 +29,6 @@ class UploadController:
         self.uploaded_cvs = []
 
     def send_to_backend(self):
-
         files_uploaded = self.uploaded_job_description or self.uploaded_cvs
 
         if not files_uploaded:
@@ -35,7 +37,6 @@ class UploadController:
             print("requirements: \n", self.requirements)
             requirement_dicts = [r.dict() for r in self.requirements]
             print("shortlist size: ”", self.shortlist_size)
-
             files_to_send = [
                 ('jd_file', (
                     self.uploaded_job_description.name,
@@ -45,12 +46,10 @@ class UploadController:
             ]
             
             files_to_send.extend(self.uploaded_cvs)
-
             data_to_send = {
                 'shortlist_size': self.shortlist_size,
                 'requirements': json.dumps(requirement_dicts)
             }
-
             try:
                 response = requests.post(
                     'http://127.0.0.1:8080/upload-files',  # byt till din riktiga BE-URL
@@ -60,8 +59,30 @@ class UploadController:
                 print("Responsens text: \n \n", response.text)
                 if response.status_code == 200:
                     return response
-
                 else:
                     return False, f'Fel från backend: {response.status_code} - {response.text}'
             except Exception as e:
                 return False, f'Ett fel uppstod: {e}'
+            
+
+    def re_evaluate(self):
+        if not self.job_id or not self.requirements:
+            return False, 'Job ID och krav måste vara satta innan re-evaluering.'
+        try:
+            payload = {
+                'job_id': self.job_id,
+                'shortlist_size': self.shortlist_size,
+                'requirements': [r.dict() for r in self.requirements]
+            }
+            response = requests.post(
+                'http://127.0.0.1:8080/re-evaluate',
+                json=payload
+            )
+
+            if response.status_code == 200:
+                return response
+            else:
+                return False, f'Fel från backend: {response.status_code} - {response.text}'
+
+        except Exception as e:
+            return False, f'Ett fel uppstod: {e}'        

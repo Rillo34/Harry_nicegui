@@ -9,31 +9,32 @@ from models import RequirementResult, CandidateResultLong
 from typing import List, Dict, Set
 from nicegui import ui
 from models import CandidateResultLong, RequirementResult
-
+from faker import Faker
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 from nicegui import ui
+fake = Faker()
 
-# --- Del 1: Nödvändiga modeller ---
-class RequirementResult(BaseModel):
-    reqname: str
-    status: str
-    ismusthave: bool
-    source: str
+# # --- Del 1: Nödvändiga modeller ---
+# class RequirementResult(BaseModel):
+#     reqname: str
+#     status: str
+#     ismusthave: bool
+#     source: str
 
-class CandidateResultLong(BaseModel):
-    candidate_id: str
-    name: str
-    combined_score: float
-    summary: str
-    assignment: str
-    location: str
-    internal: bool
-    years_exp: str
-    education: str
-    requirements: List[RequirementResult]
+# class CandidateResultLong(BaseModel):
+#     candidate_id: str
+#     name: str
+#     combined_score: float
+#     summary: str
+#     assignment: str
+#     location: str
+#     internal: bool
+#     years_exp: str
+#     education: str
+#     requirements: List[RequirementResult]
 
 # --- Del 2: CandidateTable-klass (med update-metod och musthave/desirable) ---
 class CandidateTable:
@@ -46,6 +47,11 @@ class CandidateTable:
             cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
             self.candidates_list.append(cand_copy)
         
+        priority_fields = ["candidate_id", "name", "combined_score"]  # fält du vill ha först
+        other_fields = [f for f in CandidateResultLong.__fields__ if f not in priority_fields and f != "requirements"]
+        excluded_fields = ["education", "summary"]
+
+        ordered_fields = [f for f in priority_fields + other_fields if f not in excluded_fields]
         self.columns = [
             {
                 "name": field,
@@ -54,7 +60,8 @@ class CandidateTable:
                 "sortable": True,
                 "style": "max-width: 200px; white-space: normal; word-wrap: break-word;"
             }
-            for field in CandidateResultLong.__fields__.keys() if field != 'requirements'
+            # for field in CandidateResultLong.__fields__.keys() if field != 'requirements'
+            for field in ordered_fields
         ]
         self.columns.extend([
             {
@@ -103,7 +110,7 @@ class CandidateTable:
             rows=self.candidates_list,
             row_key="candidate_id",
             pagination={'sortBy': 'combined_score', 'descending': True}
-        ).classes("w-full max-w-[1400px]")
+        ).classes("w-full max-w-[1800px]")
 
         with self.table:
             self.table.add_slot(
@@ -258,27 +265,50 @@ class CandidateTable:
         self.table.rows = filtered_rows
 
 # --- Del 3: Exempeldata och applikationsstart ---
+
 def get_initial_data() -> List[CandidateResultLong]:
     return [
         CandidateResultLong(
-            candidate_id='Nr1', name='Harry Potter', combined_score=0.95, summary='The boy who lived.',
-            assignment='Defense Against the Dark Arts', location='Hogwarts', internal=True,
-            years_exp='7', education="Hogwarts School of Witchcraft and Wizardry",
+            candidate_id="Nr1",
+            combined_score=0.95,
+            name="Harry Potter",
+            assignment="Defense Against the Dark Arts",
+            years_exp="7",
+            location="Hogwarts",
+            education="Hogwarts School of Witchcraft and Wizardry",
+            internal=True,
+            available_from = fake.date_between(start_date='-1y', end_date='+1y'),
+        
+            summary="The boy who lived.",
             requirements=[
-                RequirementResult(reqname='Bravery', status='YES', ismusthave=True, source='CV'),
-                RequirementResult(reqname='Can fly a broom', status='YES', ismusthave=True, source='CV'),
-                RequirementResult(reqname='Voldemort knowledge', status='MAYBE', ismusthave=False, source='Interview')
-            ]),
+                RequirementResult(reqname="Bravery", status="YES", ismusthave=True, source="USER"),
+                RequirementResult(reqname="Can fly a broom", status="YES", ismusthave=True, source="JD"),
+                RequirementResult(reqname="Voldemort knowledge", status="MAYBE", ismusthave=False, source="JD"),
+            ],
+            status_id=1,
+            status="Available",
+        ),
         CandidateResultLong(
-            candidate_id='Nr2', name='Hermione Granger', combined_score=0.98, summary='Brightest witch of her age.',
-            assignment='Head of Magical Law Enforcement', location='Ministry of Magic', internal=True,
-            years_exp='10+', education="Hogwarts School of Witchcraft and Wizardry",
+            candidate_id="Nr2",
+            name="Hermione Granger",
+            combined_score=0.98,
+            assignment="Head of Magical Law Enforcement",
+            years_exp="10+",
+            location="Ministry of Magic",
+            education="Hogwarts School of Witchcraft and Wizardry",
+            internal=True,
+            # ingen available_from → blir None
+            summary="Brightest witch of her age.",
             requirements=[
-                RequirementResult(reqname='Bravery', status='YES', ismusthave=True, source='CV'),
-                RequirementResult(reqname='Can fly a broom', status='NO', ismusthave=True, source='CV'),
-                RequirementResult(reqname='Voldemort knowledge', status='YES', ismusthave=False, source='Interview')
-            ])
+                RequirementResult(reqname="Bravery", status="YES", ismusthave=True, source="JD"),
+                RequirementResult(reqname="Can fly a broom", status="NO", ismusthave=True, source="JD"),
+                RequirementResult(reqname="Voldemort knowledge", status="YES", ismusthave=False, source="USER"),
+            ],
+            status_id=2,
+            status="Interviewing",
+        ),
     ]
+
 
 def get_new_dummy_data() -> List[CandidateResultLong]:
     return [

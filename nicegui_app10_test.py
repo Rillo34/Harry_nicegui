@@ -7,7 +7,7 @@ import os
 import comp_candidate_table1
 from comp_requirements import RequirementSection
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
-from models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult
+from models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult, ReEvaluateResponse
 
 
 controller = api_fe.UploadController()
@@ -38,6 +38,20 @@ def main_page():
         ]
         controller.uploaded_cvs = cv_files
 
+    async def re_evaluate():
+        response = controller.re_evaluate()
+        print("in re-evaluate")
+        if response:
+            response_data = ReEvaluateResponse(**response.json())
+            controller.job_id = response_data.job_id
+            # controller.requirements = response_data.requirements
+            candidates = response_data.candidates
+            RequirementSection.refresh_requirements(requirements_section)
+            refresh_candidates(candidates)
+    
+            Eval_button.props('disabled') 
+
+
     async def handle_send_to_backend():
         response = controller.send_to_backend()
         Eval_button.props('disabled') 
@@ -46,6 +60,15 @@ def main_page():
         response_data = EvaluateResponse(**response.json())
         new_requirements = response_data.updated_requirements
         controller.requirements = new_requirements
+        job_card.clear()
+        controller.job_id = response_data.job.job_id
+        controller.job_description = response_data.job.description
+        controller.customer = response_data.job.customer
+        with job_card:
+            ui.label(f'Job_ID: {controller.job_id}')
+            ui.label(f'Description: {controller.job_description}')
+            ui.label(f'Customer: {controller.customer}')
+        print("Controller har nu job_id:\n", controller.job_id)
         file_section_expansion.expanded = False 
         file_section_expansion.update()
         candidates = response_data.candidates        
@@ -72,9 +95,8 @@ def main_page():
                     ui.label('Upload CVs').classes('text-lg font-bold')
                     ui.upload(on_multi_upload=handle_cv_upload, auto_upload=True, multiple=True)
             
-            Eval_button = ui.button('Initial evaluate', icon='send').classes('mt-4 bg-blue-500 text-white').on('click', handle_send_to_backend)
+            Eval_button = ui.button('Initial evaluate', icon='send').classes('mt-4 bg-blue-500 text-white').on('click', lambda e: handle_send_to_backend())
 
-            # Shortlist size
             with ui.card().classes('shadow-lg p-4 w-96 mt-4'):
                 requirements_section = RequirementSection(controller, ui.card().classes('shadow-lg p-4 w-96 t-4'))  # Instantiate here
 
@@ -83,6 +105,8 @@ def main_page():
             with ui.card().classes('shadow-lg p-4 w-full mt-4'):
                 with ui.row().classes("w-full justify-between gap-2"):
                     ui.label('Candidates').classes('text-lg font-bold mb-2')
+                    job_card = ui.card().classes('shadow-md p-4 w-1/4 mt-4')
+                    # job_id_input = ui.input(label='Job-ID', value=controller.job_id).props('readonly')
                     # ui.label('Välj Shortlist Size').classes('text-lg font-bold')
                     shortlist_size = ui.select(
                         options=[3, 5, 10, 20],
@@ -93,7 +117,7 @@ def main_page():
                             ui.notify(f'Checkbox is now {str(e.value)}')
                     c1 = ui.checkbox('Include internal candidates', on_change=on_checkbox_change)
                     # Här kan du ha en tom rad för filter senare
-                    Reeval_button =ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white').on('click', handle_send_to_backend).props('disabled')
+                    Reeval_button =ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white').on('click', lambda e: re_evaluate()).props('disabled')
                 filter_container = ui.row().classes("flex flex-wrap gap-4")
                 table_container = ui.element('div').classes('w-full max-w-[1400px] mx-auto')                
                 initial_candidate_data = comp_candidate_table1.get_initial_data()
