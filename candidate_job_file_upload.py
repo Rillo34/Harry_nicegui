@@ -5,9 +5,10 @@ import asyncio
 import sys
 import os
 import comp_candidate_table1
+from comp_left_drawer import LeftDrawer
 from comp_requirements import RequirementSection
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
-from models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult, ReEvaluateResponse
+from models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult, ReEvaluateResponse, ReSize, ReSizeResponse
 
 
 controller = api_fe.UploadController()
@@ -18,12 +19,12 @@ list_of_requirements = []
 
 
 def main_page():
+    Left_drawer = LeftDrawer()
     controller.requirements.clear()
     def refresh_candidates(candidates):
-            # If you rebuild UI:
-        # table_container.clear()
+        table_container.clear()
         with table_container:
-            candidate_ui_table.update(candidates)
+            candidate_ui_table = comp_candidate_table1.CandidateTable(candidates)
 
     async def handle_jd_upload(e: events.UploadEventArguments):
         controller.uploaded_job_description = e
@@ -44,11 +45,10 @@ def main_page():
         if response:
             response_data = ReEvaluateResponse(**response.json())
             controller.job_id = response_data.job_id
-            # controller.requirements = response_data.requirements
+            print("\n controllerns requirements i reeval efter response:\n", controller.requirements)
             candidates = response_data.candidates
             RequirementSection.refresh_requirements(requirements_section)
             refresh_candidates(candidates)
-    
             Eval_button.props('disabled') 
 
 
@@ -68,20 +68,33 @@ def main_page():
             ui.label(f'Job_ID: {controller.job_id}')
             ui.label(f'Description: {controller.job_description}')
             ui.label(f'Customer: {controller.customer}')
-        print("Controller har nu job_id:\n", controller.job_id)
         file_section_expansion.expanded = False 
         file_section_expansion.update()
         candidates = response_data.candidates        
         if candidates:  # Check if candidates list is not empty
             RequirementSection.refresh_requirements(requirements_section)
             refresh_candidates(candidates)
-                 
         else:
             ui.notify('No candidates returned from backend', type='warning')
-            print("No candidates returned from backend")
+
+    async def on_shortlist_change(e):
+        controller.shortlist_size = e.value
+        new_value = e.value
+        response = controller.re_size()
+        print("in re-size")
+        if response:
+            response_data = ReSizeResponse(**response.json())
+            candidates = response_data.candidates
+            refresh_candidates(candidates)
+            Eval_button.props('disabled') 
+            ui.notify(f'Shortlist size changed to {new_value}')
+        else:
+            print("Error in resizing")    
+        # re_evaluate()  # om du vill köra direkt    
 
         
     with ui.row().classes('w-full h-screen'):
+        # ui.label('Harry').classes('text-lg font-medium ml-2')
         with ui.column().classes('w-96 p-4'):
             file_section_expansion = ui.expansion('File upload', icon='folder').classes('w-96')
             with file_section_expansion:
@@ -109,9 +122,10 @@ def main_page():
                     # job_id_input = ui.input(label='Job-ID', value=controller.job_id).props('readonly')
                     # ui.label('Välj Shortlist Size').classes('text-lg font-bold')
                     shortlist_size = ui.select(
-                        options=[3, 5, 10, 20],
-                        value=5,
-                        label='Shortlist size'
+                        options=[1, 3, 5, 10, 20],
+                        value=controller.shortlist_size,
+                        label='Shortlist size',
+                        on_change=on_shortlist_change
                     ).classes("w-[150px] mt-2")
                     def on_checkbox_change(e):
                             ui.notify(f'Checkbox is now {str(e.value)}')

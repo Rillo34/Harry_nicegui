@@ -53,9 +53,9 @@ class RequirementSection:
         print(f"Refreshing requirements: {len(self.controller.requirements)} items")
         self.requirements_container.clear()
         with self.requirements_container:
-            print("controllerns requirements: ", self.controller.requirements)
+            # print("controllerns requirements: ", self.controller.requirements)
             for req in self.controller.requirements:
-                print(f"Rendering requirement: {req.reqname}, must_have={req.ismusthave}")
+                # print(f"Rendering requirement: {req.reqname}, must_have={req.ismusthave}")
                 with ui.row().classes('w-full items-center border-b p-1'):
                     ui.switch(value=req.ismusthave, on_change=lambda e, r=req: self.toggle_requirement(r.reqname)).classes('mr-2').props('color=green')
                     ui.label(req.reqname).classes('flex-grow ' + ('font-bold text-green-700' if req.ismusthave else 'text-gray-600'))

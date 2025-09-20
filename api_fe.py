@@ -28,13 +28,14 @@ class UploadController:
         self.uploaded_job_description = None
         self.uploaded_cvs = []
 
+
     def send_to_backend(self):
         files_uploaded = self.uploaded_job_description or self.uploaded_cvs
 
         if not files_uploaded:
             ui.notify(f'You must upload CVs and Job Description', type='info')
         else:
-            print("requirements: \n", self.requirements)
+            print("requirements SOM SKICKAS TILL BE i send to backend: \n", self.requirements)
             requirement_dicts = [r.dict() for r in self.requirements]
             print("shortlist size: ”", self.shortlist_size)
             files_to_send = [
@@ -76,6 +77,27 @@ class UploadController:
             }
             response = requests.post(
                 'http://127.0.0.1:8080/re-evaluate',
+                json=payload
+            )
+
+            if response.status_code == 200:
+                return response
+            else:
+                return False, f'Fel från backend: {response.status_code} - {response.text}'
+
+        except Exception as e:
+            return False, f'Ett fel uppstod: {e}'    
+         
+    def re_size(self):
+        if not self.job_id or not self.requirements:
+            return False, 'Job ID och krav måste vara satta innan re-evaluering.'
+        try:
+            payload = {
+                'job_id': self.job_id,
+                'shortlist_size': self.shortlist_size,
+            }
+            response = requests.post(
+                'http://127.0.0.1:8080/choose-shortlist-size',
                 json=payload
             )
 

@@ -17,24 +17,12 @@ from pydantic import BaseModel
 from nicegui import ui
 fake = Faker()
 
-# # --- Del 1: Nödvändiga modeller ---
-# class RequirementResult(BaseModel):
-#     reqname: str
-#     status: str
-#     ismusthave: bool
-#     source: str
-
-# class CandidateResultLong(BaseModel):
-#     candidate_id: str
-#     name: str
-#     combined_score: float
-#     summary: str
-#     assignment: str
-#     location: str
-#     internal: bool
-#     years_exp: str
-#     education: str
-#     requirements: List[RequirementResult]
+status_list = [
+    {'key': 'contacted', 'label': 'Kontaktad'},
+    {'key': 'interviewed', 'label': 'Intervjuad'},
+    {'key': 'offered', 'label': 'Erbjuden'},
+    {'key': 'rejected', 'label': 'Avslagen'},
+]
 
 # --- Del 2: CandidateTable-klass (med update-metod och musthave/desirable) ---
 class CandidateTable:
@@ -149,25 +137,25 @@ class CandidateTable:
                 </q-td>
                 '''
             )
+            status_items_html = "\n".join([
+                f'''
+                <q-item clickable v-close-popup
+                    @click="$parent.$emit('menu_action', {{action: 'set_status', row_id: props.row.id, status: '{status['key']}'}})">
+                    <q-item-section>{status['label']}</q-item-section>
+                </q-item>
+                ''' for status in status_list
+            ])
+
+            # Lägg till meny i tabellens actions-kolumn
             self.table.add_slot(
                 "body-cell-actions",
-                r'''
+                f'''
                 <q-td :props="props">
                     <q-btn dense flat round icon="more_vert">
                         <q-menu>
                             <q-list style="min-width: 150px">
-                                <q-item clickable v-close-popup
-                                        @click="console.log('Emitting details for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'details', row_id: props.row.candidate_id})">
-                                    <q-item-section>Visa detaljer</q-item-section>
-                                </q-item>
-                                <q-item clickable v-close-popup
-                                        @click="console.log('Emitting edit for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'edit', row_id: props.row.candidate_id})">
-                                    <q-item-section>Redigera</q-item-section>
-                                </q-item>
-                                <q-item clickable v-close-popup
-                                        @click="console.log('Emitting delete for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'delete', row_id: props.row.candidate_id})">
-                                    <q-item-section>Ta bort</q-item-section>
-                                </q-item>
+                                <q-item-label header>Status</q-item-label>
+                                {status_items_html}
                             </q-list>
                         </q-menu>
                     </q-btn>
@@ -175,7 +163,7 @@ class CandidateTable:
                 '''
             )
             self.table.on('menu_action', self._on_action)
-            self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))  # Debug row click
+            # self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))  # Debug row click
 
     def update(self, new_candidates: List[CandidateResultLong]):
         """Update the table with new candidates, refreshing data and UI."""
@@ -334,25 +322,25 @@ def get_new_dummy_data() -> List[CandidateResultLong]:
             ])
     ]
 
-# @ui.page('/')
-# def main_page():
-#     ui.label('Candidate Table').classes('text-2xl font-bold p-4')
-#     initial_candidates = get_initial_data()
-#     CandidateTable(candidates=initial_candidates)
+@ui.page('/')
+def main_page():
+    ui.label('Candidate Table').classes('text-2xl font-bold p-4')
+    initial_candidates = get_initial_data()
+    CandidateTable(candidates=initial_candidates)
    
 
-# ui.run(port=8004, reload=False)  # Använder reload=False för stabilare felsökning
+ui.run(port=8004, reload=False)  # Använder reload=False för stabilare felsökning
     
 
 
-# # Sample data
-# def get_initial_data():
-#     return [CandidateResultLong
-#             (candidate_id='Nr1', name='Harry', combined_score=0.65, summary='Harry is the best', assignment='Best recruiter in the world', 
-#              location='RobeStockholm', internal=False, years_exp='3-5', education="Master's, Computer Science", 
-#              requirements=[RequirementResult(reqname='Can recruit fast', status='YES', ismusthave=True, source='JD'), 
-#             RequirementResult(reqname='and really good', status='YES', ismusthave=True, source='JD')])
-#             ]   
+# Sample data
+def get_initial_data():
+    return [CandidateResultLong
+            (candidate_id='Nr1', name='Harry', combined_score=0.65, summary='Harry is the best', assignment='Best recruiter in the world', 
+             location='RobeStockholm', internal=False, years_exp='3-5', education="Master's, Computer Science", 
+             requirements=[RequirementResult(reqname='Can recruit fast', status='YES', ismusthave=True, source='JD'), 
+            RequirementResult(reqname='and really good', status='YES', ismusthave=True, source='JD')])
+            ]   
     
 
 
