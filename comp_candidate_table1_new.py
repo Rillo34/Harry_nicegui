@@ -1,66 +1,68 @@
 from nicegui import ui
-import uuid
-import sys, os
-from typing import Dict, List, Set
-from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent / 'backend'))
-from models import RequirementResult, CandidateResultLong
-
-from typing import List, Dict, Set
-from nicegui import ui
-from models import CandidateResultLong, RequirementResult
-from faker import Faker
-import sys
-from pathlib import Path
-from typing import Dict, List, Optional
 from pydantic import BaseModel
-from nicegui import ui
+from typing import List, Optional, Literal, Dict
+from datetime import datetime, date
+import uuid
+from faker import Faker
+
 fake = Faker()
 
-# # --- Del 1: Nödvändiga modeller ---
-# class RequirementResult(BaseModel):
-#     reqname: str
-#     status: str
-#     ismusthave: bool
-#     source: str
+# Models
+class RequirementResult(BaseModel):
+    reqname: str
+    status: str
+    ismusthave: bool
+    source: str
 
-# class CandidateResultLong(BaseModel):
-#     candidate_id: str
-#     name: str
-#     combined_score: float
-#     summary: str
-#     assignment: str
-#     location: str
-#     internal: bool
-#     years_exp: str
-#     education: str
-#     requirements: List[RequirementResult]
+class CandidateResultLong(BaseModel):
+    candidate_id: str
+    name: str
+    combined_score: float
+    summary: str
+    assignment: str
+    location: str
+    internal: bool
+    years_exp: str
+    education: str
+    requirements: List[RequirementResult]
+    status_id: int
+    status: str
+    available_from: Optional[date] = None
 
-# --- Del 2: CandidateTable-klass (med update-metod och musthave/desirable) ---
 class CandidateTable:
-    def __init__(self, candidates: List[CandidateResultLong]):
+    def __init__(self, candidates: List[CandidateResultLong], fictive_start_date: date = date(2025, 10, 1)):
+        self.fictive_start_date = fictive_start_date
         self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in candidates}
         self.candidates_list = []
         for cand in self.candidates_map.values():
             cand_copy = cand.copy()
             cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
             cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
+            cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"
+            if cand_copy.get('available_from'):
+                days = (cand_copy['available_from'] - self.fictive_start_date).days
+                cand_copy['job_availability'] = f"{days}d"
+            else:
+                cand_copy['job_availability'] = "N/A"
             self.candidates_list.append(cand_copy)
         
-        priority_fields = ["candidate_id", "name", "combined_score"]  # fält du vill ha först
+        print(f"Job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
+
+        priority_fields = ["candidate_id", "name", "combined_score"]
         other_fields = [f for f in CandidateResultLong.__fields__ if f not in priority_fields and f != "requirements"]
         excluded_fields = ["education", "summary"]
-
         ordered_fields = [f for f in priority_fields + other_fields if f not in excluded_fields]
+        ordered_fields.append("job_availability")
+
         self.columns = [
             {
                 "name": field,
-                "label": field.replace("_", " ").capitalize(),
+                "label": field.replace("_", " ").capitalize() if field != "job_availability" else "Job Availability",
                 "field": field,
                 "sortable": True,
-                "style": "max-width: 200px; white-space: normal; word-wrap: break-word;"
+                "style": "max-width: 200px; white-space: normal; word-wrap: break-word;",
+                "align": "left"
             }
-            # for field in CandidateResultLong.__fields__.keys() if field != 'requirements'
             for field in ordered_fields
         ]
         self.columns.extend([
@@ -68,19 +70,24 @@ class CandidateTable:
                 "name": "musthave",
                 "label": "Must-have",
                 "field": "musthave",
-                "sortable": False
+                "sortable": False,
+                "style": "max-width: 250px; white-space: normal; word-wrap: break-word;",
+                "align": "left"
             },
             {
                 "name": "desirable",
                 "label": "Desirable",
                 "field": "desirable",
-                "sortable": False
+                "sortable": False,
+                "style": "max-width: 250px; white-space: normal; word-wrap: break-word;",
+                "align": "left"
             },
             {
                 "name": "actions",
                 "label": "",
                 "field": "actions",
-                "sortable": False
+                "sortable": False,
+                "align": "left"
             }
         ])
 
@@ -90,22 +97,24 @@ class CandidateTable:
             for req in cand["requirements"]
         })
         self.filters: Dict[str, List[str]] = {req_name: [] for req_name in self.req_names}
+        self.search_term = ""
+
         self._build_ui()
 
     def _build_ui(self):
-        filter_section_expansion = ui.expansion('Reguirements', icon='extension').classes('w-full')
+        with ui.row().classes('items-center w-full'):
+            ui.label('Candidate Table').classes('text-2xl font-bold p-4')
+            ui.input(
+                placeholder='Search candidates...',
+                on_change=lambda e: self._update_search(e.value)
+            ).classes('w-64')
+
+        filter_section_expansion = ui.expansion('Requirements', icon='extension').classes('w-full')
         with filter_section_expansion:
-        # with ui.card().classes("w-full mb-4"):
             ui.label("Filter by Requirements").classes("text-lg font-bold")
             self.filter_container = ui.row().classes("flex flex-wrap gap-4")
             with self.filter_container:
                 self._render_filters()
-
-            # Add input field and button for updating candidates
-            # ui.label("Update Candidates").classes("text-lg font-bold mt-4")
-            # with ui.row():
-            #     self.update_input = ui.input("Enter 'update' to load new candidates").classes("w-64")
-            #     ui.button("Update", on_click=self._handle_update_button).classes("mt-2")
 
         self.table = ui.table(
             columns=self.columns,
@@ -115,6 +124,22 @@ class CandidateTable:
         ).classes("w-full max-w-[1800px]")
 
         with self.table:
+            self.table.add_slot(
+                "body-cell-combined_score",
+                r'''
+                <q-td :props="props" style="background-color: #fff9c4; font-weight: bold; text-align: left;">
+                    {{ props.row.combined_score }}
+                </q-td>
+                '''
+            )
+            self.table.add_slot(
+                "body-cell-job_availability",
+                r'''
+                <q-td :props="props">
+                    {{ props.row.job_availability }}
+                </q-td>
+                '''
+            )
             self.table.add_slot(
                 "body-cell-musthave",
                 r'''
@@ -174,45 +199,69 @@ class CandidateTable:
                 </q-td>
                 '''
             )
+            # Custom sort for job_availability by absolute value
+            self.table.add_slot(
+                "header-cell-job_availability",
+                r'''
+                <q-th :props="props">
+                    <q-btn flat dense @click="sortByAbsJobAvailability(props)">
+                        {{ props.col.label }}
+                        <q-icon v-if="props.sortBy === 'job_availability' && props.descending" name="arrow_drop_down" />
+                        <q-icon v-if="props.sortBy === 'job_availability' && !props.descending" name="arrow_drop_up" />
+                    </q-btn>
+                </q-th>
+                '''
+            )
             self.table.on('menu_action', self._on_action)
-            self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))  # Debug row click
+            self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))
+            # Add custom sort function in JavaScript
+            ui.add_head_html('''
+                <script>
+                function sortByAbsJobAvailability(props) {
+                    const table = props.table;
+                    table.sortBy = 'job_availability';
+                    table.descending = props.sortBy === 'job_availability' ? !props.descending : false;
+                    table.rows.sort((a, b) => {
+                        const aVal = a.job_availability === 'N/A' ? Infinity : Math.abs(parseInt(a.job_availability));
+                        const bVal = b.job_availability === 'N/A' ? Infinity : Math.abs(parseInt(b.job_availability));
+                        return table.descending ? bVal - aVal : aVal - bVal;
+                    });
+                    table.$emit('update:pagination', { sortBy: 'job_availability', descending: table.descending });
+                    table.$forceUpdate();
+                }
+                </script>
+            ''')
 
     def update(self, new_candidates: List[CandidateResultLong]):
         """Update the table with new candidates, refreshing data and UI."""
-        # Update candidates_map and candidates_list
         self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in new_candidates}
         self.candidates_list = []
         for cand in self.candidates_map.values():
             cand_copy = cand.copy()
             cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
             cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
+            cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"
+            if cand_copy.get('available_from'):
+                days = (cand_copy['available_from'] - self.fictive_start_date).days
+                cand_copy['job_availability'] = f"{days}d"
+            else:
+                cand_copy['job_availability'] = "N/A"
             self.candidates_list.append(cand_copy)
 
-        # Update requirement names and filters
+        print(f"Updated job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
         self.req_names = sorted({
             req["reqname"]
             for cand in self.candidates_list
             for req in cand["requirements"]
         })
         self.filters = {req_name: [] for req_name in self.req_names}
+        self.search_term = ""
 
-        # Refresh the table rows
         self.table.rows = self.candidates_list
-
-        # Clear and rebuild the filter UI
         self.filter_container.clear()
         with self.filter_container:
             self._render_filters()
-
-    def _handle_update_button(self):
-        """Handle the update button click, loading new dummy data if input is 'update'."""
-        if self.update_input.value.lower() == 'update':
-            new_candidates = get_new_dummy_data()
-            self.update(new_candidates)
-            ui.notify("Table updated with new candidates!", type='positive')
-            self.update_input.value = ''  # Clear the input field
-        else:
-            ui.notify("Please enter 'update' to load new candidates.", type='warning')
+        self.apply_filters()
 
     def _on_action(self, event):
         """Hanterar händelser från åtgärdsmenyn."""
@@ -250,10 +299,15 @@ class CandidateTable:
         self.filters[req_name] = values
         self.apply_filters()
 
+    def _update_search(self, value: str):
+        self.search_term = value.lower()
+        self.apply_filters()
+
     def apply_filters(self):
         filtered_rows = []
         for cand in self.candidates_list:
             include = True
+            # Apply requirement filters
             for req_name, selected_statuses in self.filters.items():
                 if selected_statuses:
                     req_status = next(
@@ -262,11 +316,21 @@ class CandidateTable:
                     if req_status not in selected_statuses:
                         include = False
                         break
+            # Apply search filter
+            if include and self.search_term:
+                search_match = False
+                for field in ['candidate_id', 'name', 'combined_score', 'assignment', 'location', 'years_exp', 'status', 'job_availability']:
+                    if field in cand and self.search_term in str(cand[field]).lower():
+                        search_match = True
+                        break
+                if not search_match:
+                    include = False
             if include:
                 filtered_rows.append(cand)
+        
+        print(f"Filtered rows: {[cand['name'] for cand in filtered_rows]}")
         self.table.rows = filtered_rows
-
-# --- Del 3: Exempeldata och applikationsstart ---
+        self.table.update()
 
 def get_initial_data() -> List[CandidateResultLong]:
     return [
@@ -279,8 +343,7 @@ def get_initial_data() -> List[CandidateResultLong]:
             location="Hogwarts",
             education="Hogwarts School of Witchcraft and Wizardry",
             internal=True,
-            available_from = fake.date_between(start_date='-1y', end_date='+1y'),
-        
+            available_from=date(2025, 9, 26),  # -5d from 2025-10-01
             summary="The boy who lived.",
             requirements=[
                 RequirementResult(reqname="Bravery", status="YES", ismusthave=True, source="USER"),
@@ -299,7 +362,7 @@ def get_initial_data() -> List[CandidateResultLong]:
             location="Ministry of Magic",
             education="Hogwarts School of Witchcraft and Wizardry",
             internal=True,
-            # ingen available_from → blir None
+            available_from=date(2025, 10, 11),  # +10d from 2025-10-01
             summary="Brightest witch of her age.",
             requirements=[
                 RequirementResult(reqname="Bravery", status="YES", ismusthave=True, source="JD"),
@@ -309,50 +372,91 @@ def get_initial_data() -> List[CandidateResultLong]:
             status_id=2,
             status="Interviewing",
         ),
+        CandidateResultLong(
+            candidate_id="Nr3",
+            name="Ron Weasley",
+            combined_score=0.85,
+            assignment="Auror Training",
+            years_exp="6",
+            location="Ministry of Magic",
+            education="Hogwarts School of Witchcraft and Wizardry",
+            internal=True,
+            available_from=None,  # N/A
+            summary="Loyal friend and strategist.",
+            requirements=[
+                RequirementResult(reqname="Bravery", status="YES", ismusthave=True, source="USER"),
+                RequirementResult(reqname="Can fly a broom", status="MAYBE", ismusthave=True, source="JD"),
+                RequirementResult(reqname="Voldemort knowledge", status="NO", ismusthave=False, source="JD"),
+            ],
+            status_id=3,
+            status="Available",
+        ),
+        CandidateResultLong(
+            candidate_id="Nr4",
+            name="Luna Lovegood",
+            combined_score=0.90,
+            assignment="Magizoologist",
+            years_exp="5",
+            location="Hogsmeade",
+            education="Hogwarts School of Witchcraft and Wizardry",
+            internal=False,
+            available_from=date(2025, 10, 1),  # 0d from 2025-10-01
+            summary="Creative and open-minded witch.",
+            requirements=[
+                RequirementResult(reqname="Bravery", status="MAYBE", ismusthave=True, source="JD"),
+                RequirementResult(reqname="Can fly a broom", status="NO", ismusthave=True, source="JD"),
+                RequirementResult(reqname="Voldemort knowledge", status="YES", ismusthave=False, source="JD"),
+            ],
+            status_id=4,
+            status="Interviewing",
+        ),
     ]
-
 
 def get_new_dummy_data() -> List[CandidateResultLong]:
     return [
         CandidateResultLong(
-            candidate_id='Nr3', name='Ron Weasley', combined_score=0.85, summary='Loyal friend and strategist.',
-            assignment='Auror Training', location='Ministry of Magic', internal=True,
-            years_exp='6', education="Hogwarts School of Witchcraft and Wizardry",
+            candidate_id='Nr5',
+            name='Draco Malfoy',
+            combined_score=0.88,
+            summary='Ambitious and cunning.',
+            assignment='Slytherin Consultant',
+            location='Malfoy Manor',
+            internal=False,
+            years_exp='6',
+            education="Hogwarts School of Witchcraft and Wizardry",
+            available_from=date(2025, 9, 21),  # -10d from 2025-10-01
+            requirements=[
+                RequirementResult(reqname='Teamwork', status='NO', ismusthave=True, source='CV'),
+                RequirementResult(reqname='Combat skills', status='YES', ismusthave=True, source='Interview'),
+                RequirementResult(reqname='Chess mastery', status='MAYBE', ismusthave=False, source='Reference')
+            ],
+            status_id=5,
+            status="Available",
+        ),
+        CandidateResultLong(
+            candidate_id='Nr6',
+            name='Neville Longbottom',
+            combined_score=0.87,
+            summary='Brave and loyal.',
+            assignment='Herbology Specialist',
+            location='Hogwarts',
+            internal=True,
+            years_exp='5',
+            education="Hogwarts School of Witchcraft and Wizardry",
+            available_from=date(2025, 10, 6),  # +5d from 2025-10-01
             requirements=[
                 RequirementResult(reqname='Teamwork', status='YES', ismusthave=True, source='CV'),
                 RequirementResult(reqname='Combat skills', status='MAYBE', ismusthave=True, source='Interview'),
-                RequirementResult(reqname='Chess mastery', status='YES', ismusthave=False, source='Reference')
-            ]),
-        CandidateResultLong(
-            candidate_id='Nr4', name='Luna Lovegood', combined_score=0.90, summary='Creative and open-minded witch.',
-            assignment='Magizoologist', location='Hogsmeade', internal=False,
-            years_exp='5', education="Hogwarts School of Witchcraft and Wizardry",
-            requirements=[
-                RequirementResult(reqname='Teamwork', status='MAYBE', ismusthave=True, source='CV'),
-                RequirementResult(reqname='Combat skills', status='NO', ismusthave=True, source='Interview'),
-                RequirementResult(reqname='Chess mastery', status='YES', ismusthave=False, source='Reference')
-            ])
+                RequirementResult(reqname='Chess mastery', status='NO', ismusthave=False, source='Reference')
+            ],
+            status_id=6,
+            status="Available",
+        )
     ]
 
 @ui.page('/')
 def main_page():
-    ui.label('Candidate Table').classes('text-2xl font-bold p-4')
     initial_candidates = get_initial_data()
     CandidateTable(candidates=initial_candidates)
-   
 
-ui.run(port=8004, reload=False)  # Använder reload=False för stabilare felsökning
-    
-
-
-# # Sample data
-# def get_initial_data():
-#     return [CandidateResultLong
-#             (candidate_id='Nr1', name='Harry', combined_score=0.65, summary='Harry is the best', assignment='Best recruiter in the world', 
-#              location='RobeStockholm', internal=False, years_exp='3-5', education="Master's, Computer Science", 
-#              requirements=[RequirementResult(reqname='Can recruit fast', status='YES', ismusthave=True, source='JD'), 
-#             RequirementResult(reqname='and really good', status='YES', ismusthave=True, source='JD')])
-#             ]   
-    
-
-
+ui.run(port=8004, reload=False)

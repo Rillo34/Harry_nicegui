@@ -3,38 +3,13 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal
 from datetime import datetime, date
 import uuid
+import os
+import sys
 from faker import Faker
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+from models import CandidatePayload, RequirementPayload, JobRequest
 fake = Faker()
 
-# Models
-class CandidatePayload(BaseModel):
-    candidate_id: str
-    name: str
-    status: str
-
-class RequirementPayload(BaseModel):
-    reqname: str
-    isActive: Optional[bool] = None
-    ismusthave: bool
-    source: Literal["USER", "JD"]
-
-class JobRequest(BaseModel):
-    job_id: str
-    title: str
-    description: str
-    customer: str
-    contact_person: str
-    state: str
-    assigned_to: str
-    start_date: Optional[date] = None
-    duration: str
-    requirements: List[RequirementPayload]
-    candidates: Optional[List[CandidatePayload]] = []
-    created_at: datetime
-    model_config = {
-        "from_attributes": True
-    }
 
 class JobList:
     def __init__(self, jobs: List[JobRequest]):
@@ -57,18 +32,23 @@ class JobList:
                 job_copy['highest_status'] = next((k for k, v in self.status_order.items() if v == max_level), "Unknown")
             else:
                 job_copy['highest_status'] = "None"
+            # Calculate days left until due_date
+            if job_copy.get('due_date'):
+                days_left = (job_copy['due_date'] - date.today()).days
+                job_copy['days_left'] = f"{days_left}d" if days_left >= 0 else f"{-days_left}d"
+            else:
+                job_copy['days_left'] = "None"
             self.jobs_list.append(job_copy)
 
         # Define table columns
-        priority_fields = ["job_id", "title", "customer", "contact_person", "start_date", "duration", "state"]
-        other_fields = [f for f in JobRequest.__fields__ if f not in priority_fields and f not in ["requirements", "candidates" "created_at", "description"]]
-        excluded_fields = ["description"]
-        ordered_fields = [f for f in priority_fields + other_fields if f not in excluded_fields]
+        excluded_fields = ["description", "requirements", "candidates", "created_at", "due_date"]
+        ordered_fields = [f for f in JobRequest.__fields__ if f not in excluded_fields]
+        ordered_fields.extend(["candidate_count", "highest_status", "days_left"])  # Add custom fields
         
         self.columns = [
             {
                 "name": field,
-                "label": field.replace("_", " ").capitalize(),
+                "label": field.replace("_", " ").capitalize() if field != "days_left" else "Days Left",
                 "field": field,
                 "sortable": True,
                 "style": "max-width: 200px; white-space: normal; word-wrap: break-word;",
@@ -105,25 +85,28 @@ class JobList:
         self._build_ui()
 
     def _build_ui(self):
-        ui.label('Job List').classes('text-2xl font-bold p-4')
-        
+        with ui.row().classes('items-center p-2').style('width: auto'):
+            ui.label('Job List').style('width: 150px').classes('text-xl font-bold')
+            search_input = ui.input(label='Search').props('clearable').style('margin-left: 20px; width: 250px')
+            
         self.table = ui.table(
             columns=self.columns,
             rows=self.jobs_list,
             row_key="job_id",
             pagination={'sortBy': 'created_at', 'descending': True}
         ).classes("w-full max-w-[1800px]")
+        self.table.bind_filter_from(search_input, 'value')
 
         with self.table:
             self.table.add_slot(
                 "body-cell-musthave",
                 r'''
                 <q-td :props="props">
-                    <div class="text-sm" style="text-align: left;">
-                        <span v-for="req in props.row.musthave" :key="req.reqname">
-                            {{ req.reqname }}<span v-if="props.row.musthave[props.row.musthave.length - 1] !== req">, </span>
-                        </span>
-                        <span v-if="!props.row.musthave.length">None</span>
+                    <div class="text-sm" style="text-align: left; line-height: 1.2;">
+                        <div v-for="req in props.row.musthave" :key="req.reqname">
+                            {{ req.reqname }}
+                        </div>
+                        <div v-if="!props.row.musthave.length">None</div>
                     </div>
                 </q-td>
                 '''
@@ -132,11 +115,11 @@ class JobList:
                 "body-cell-desirable",
                 r'''
                 <q-td :props="props">
-                    <div class="text-sm" style="text-align: left;">
-                        <span v-for="req in props.row.desirable" :key="req.reqname">
-                            {{ req.reqname }}<span v-if="props.row.desirable[props.row.desirable.length - 1] !== req">, </span>
-                        </span>
-                        <span v-if="!props.row.desirable.length">None</span>
+                    <div class="text-sm" style="text-align: left; line-height: 1.2;">
+                        <div v-for="req in props.row.desirable" :key="req.reqname">
+                            {{ req.reqname }}
+                        </div>
+                        <div v-if="!props.row.desirable.length">None</div>
                     </div>
                 </q-td>
                 '''
@@ -144,7 +127,7 @@ class JobList:
             self.table.add_slot(
                 "body-cell-candidate_count",
                 r'''
-                <q-td :props="props" style="background-color: #e3f2fd; text-align: left;">
+                <q-td :props="props" style="background-color: #f5f5f5; text-align: left;">
                     {{ props.row.candidate_count }}
                 </q-td>
                 '''
@@ -152,8 +135,32 @@ class JobList:
             self.table.add_slot(
                 "body-cell-highest_status",
                 r'''
-                <q-td :props="props" style="background-color: #fff3e0; text-align: left;">
+                <q-td :props="props" style="background-color: #f5f5f5; text-align: left;">
                     {{ props.row.highest_status }}
+                </q-td>
+                '''
+            )
+            self.table.add_slot(
+                "body-cell-assigned_to",
+                r'''
+                <q-td :props="props" style="background-color: #f5f5f5; text-align: left;">
+                    {{ props.row.assigned_to }}
+                </q-td>
+                '''
+            )
+            self.table.add_slot(
+                "body-cell-state",
+                r'''
+                <q-td :props="props" style="background-color: #f5f5f5; text-align: left;">
+                    {{ props.row.state }}
+                </q-td>
+                '''
+            )
+            self.table.add_slot(
+                "body-cell-days_left",
+                r'''
+                <q-td :props="props" :style="props.row.days_left === 'None' ? '' : (parseInt(props.row.days_left) < 0 ? 'background-color: #ffcdd2; text-align: left;' : parseInt(props.row.days_left) < 7 ? 'background-color: #fff9c4; text-align: left;' : 'background-color: #c8e6c9; text-align: left;')">
+                    {{ props.row.days_left }}
                 </q-td>
                 '''
             )
@@ -208,7 +215,7 @@ class JobList:
         elif action == 'delete':
             ui.notify(f"Deleting {job_title}", type='negative')
 
-# Example data with more candidates and varied statuses
+# Example data with updated JobRequest model and candidates
 def get_initial_jobs() -> List[JobRequest]:
     return [
         JobRequest(
@@ -221,6 +228,7 @@ def get_initial_jobs() -> List[JobRequest]:
             assigned_to="Jane Smith",
             start_date=fake.date_between(start_date='today', end_date='+1y'),
             duration="12 months",
+            due_date=fake.date_between(start_date='+10d', end_date='+30d'),  # Green
             requirements=[
                 RequirementPayload(reqname="Python", isActive=True, ismusthave=True, source="JD"),
                 RequirementPayload(reqname="JavaScript", isActive=True, ismusthave=True, source="JD"),
@@ -245,6 +253,7 @@ def get_initial_jobs() -> List[JobRequest]:
             assigned_to="Mark Taylor",
             start_date=None,
             duration="6 months",
+            due_date=fake.date_between(start_date='+2d', end_date='+5d'),  # Yellow
             requirements=[
                 RequirementPayload(reqname="Machine Learning", isActive=True, ismusthave=True, source="JD"),
                 RequirementPayload(reqname="SQL", isActive=False, ismusthave=True, source="JD"),
@@ -266,6 +275,7 @@ def get_initial_jobs() -> List[JobRequest]:
             assigned_to="Lisa White",
             start_date=fake.date_between(start_date='today', end_date='+6m'),
             duration="9 months",
+            due_date=fake.date_between(start_date='-10d', end_date='-1d'),  # Red
             requirements=[
                 RequirementPayload(reqname="PMP Certification", isActive=True, ismusthave=True, source="JD"),
                 RequirementPayload(reqname="Scrum Master", isActive=None, ismusthave=False, source="USER"),
@@ -277,11 +287,12 @@ def get_initial_jobs() -> List[JobRequest]:
             created_at=fake.date_time_this_year(),
         ),
     ]
+def get_initial_jobs2() -> List[JobRequest]:
+    return [{"job_id":"job_1","title":"Frontend Developer","description":"Develop UI components using React.","customer":"Acme Inc","contact_person":"Alice","start_date":"2025-10-19","duration":"contract","due_date":null,"requirements":[{"reqname":"React","isActive":false,"ismusthave":false,"source":"JD"},{"reqname":"TypeScript","isActive":true,"ismusthave":true,"source":"JD"},{"reqname":"Python","isActive":false,"ismusthave":false,"source":"JD"},{"reqname":"React","isActive":false,"ismusthave":true,"source":"JD"},{"reqname":"TypeScript","isActive":false,"ismusthave":true,"source":"USER"}],"state":"1","candidates":[],"assigned_to":"recruiter1","created_at":"2025-09-21T13:19:58.788076"},{"job_id":"job_2","title":"Backend Engineer","description":"Build backend services with Python.","customer":"Acme Inc","contact_person":"Bob","start_date":"2025-10-05","duration":"permanent","due_date":null,"requirements":[{"reqname":"SQL","isActive":false,"ismusthave":true,"source":"USER"},{"reqname":"Docker","isActive":false,"ismusthave":true,"source":"JD"}],"state":"1","candidates":[],"assigned_to":"admin","created_at":"2025-09-21T13:19:58.788474"},{"job_id":"job_3","title":"Data Analyst","description":"Analyze data and generate insights.","customer":"Acme Inc","contact_person":"Charlie","start_date":"2025-10-20","duration":"permanent","due_date":null,"requirements":[{"reqname":"FastAPI","isActive":null,"ismusthave":false,"source":"JD"},{"reqname":"Kubernetes","isActive":false,"ismusthave":true,"source":"USER"}],"state":"1","candidates":[],"assigned_to":"admin","created_at":"2025-09-21T13:19:58.788571"},{"job_id":"job_4","title":"DevOps Specialist","description":"Manage infrastructure and CI/CD.","customer":"Acme Inc","contact_person":"Diana","start_date":"2025-10-13","duration":"permanent","due_date":null,"requirements":[{"reqname":"SQL","isActive":null,"ismusthave":false,"source":"USER"},{"reqname":"FastAPI","isActive":null,"ismusthave":true,"source":"JD"},{"reqname":"AWS","isActive":true,"ismusthave":true,"source":"JD"}],"state":"1","candidates":[],"assigned_to":"recruiter1","created_at":"2025-09-21T13:19:58.788670"},{"job_id":"job_5","title":"Product Manager","description":"Define product strategy and roadmap.","customer":"Acme Inc","contact_person":"Ethan","start_date":"2025-09-25","duration":"permanent","due_date":null,"requirements":[{"reqname":"AWS","isActive":true,"ismusthave":false,"source":"JD"},{"reqname":"Python","isActive":true,"ismusthave":true,"source":"USER"},{"reqname":"SQL","isActive":false,"ismusthave":false,"source":"JD"},{"reqname":"TypeScript","isActive":false,"ismusthave":false,"source":"JD"}],"state":"1","candidates":[],"assigned_to":"recruiter2","created_at":"2025-09-21T13:19:58.788761"}]
 
 @ui.page('/')
 def main_page():
-    initial_jobs = get_initial_jobs()
+    initial_jobs = get_initial_jobs2()
     JobList(jobs=initial_jobs)
 
-# if __name__ == '__main__':
 ui.run(port=8005, reload=False)
