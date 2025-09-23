@@ -11,7 +11,7 @@ from models import RequirementPayload, JobRequest
 
 class JobList:
     def __init__(self, jobs: List[JobRequest]):
-        self.jobs_map = {j.job_id: j.dict(exclude_none=True) for j in jobs}
+        self.jobs_map = {j['job_id']: j for j in jobs}
         self.jobs_list = []
         for job in self.jobs_map.values():
             job_copy = job.copy()

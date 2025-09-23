@@ -6,6 +6,23 @@ from nicegui import events, ui
 from pydantic import parse_obj_as
 
 
+class APIController:
+    def get_all_jobs(self):
+        try:
+            response = requests.get(
+                'http://127.0.0.1:8080/get-jobs'
+            )
+            if response.status_code == 200:
+                print(response)
+                return response.json()
+            else:
+                print('Fel vid hämtning av jobb', response.status_code)
+                return []  # returnera tom lista istället för False
+        except Exception as e:
+            print('Fel vid API-anrop:', e)
+            return []
+
+
 class UploadController:
     def __init__(self):
         self.job_id = ""
