@@ -2,6 +2,7 @@ from nicegui import ui
 from comp_left_drawer import LeftDrawer
 from comp_joblist import JobList
 from api_fe import APIController
+from models import JobRequest
 
 API_client = APIController()
 
@@ -22,6 +23,7 @@ def jobs_page():
     drawer = LeftDrawer()
     job_list = API_client.get_all_jobs()
     print("joblist: ", job_list)
+    # input("vänta nu")
     joblist_display = JobList(job_list)
     # joblist_display = JobList([])
 

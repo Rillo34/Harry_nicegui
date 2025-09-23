@@ -10,20 +10,21 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'b
 from models import RequirementPayload, JobRequest
 
 class JobList:
-    def __init__(self, jobs: List[JobRequest]):
-        self.jobs_map = {j['job_id']: j for j in jobs}
+    def __init__(self, jobs: List[dict]):
+        job_objects = [JobRequest(**j) for j in jobs]
+        self.jobs_map = {j.job_id: j for j in job_objects}
         self.jobs_list = []
-        for job in self.jobs_map.values():
-            job_copy = job.copy()
-            job_copy['musthave'] = [req for req in job['requirements'] if req['ismusthave']]
-            job_copy['desirable'] = [req for req in job['requirements'] if not req['ismusthave']]
-            # Calculate days left until due_date
-            if job_copy.get('due_date'):
-                days_left = (job_copy['due_date'] - date.today()).days
-                job_copy['days_left'] = f"{days_left}d" if days_left >= 0 else f"{-days_left}d"
+
+        for job in job_objects:
+            job_dict = job.model_dump(exclude_none=True)
+            job_dict['musthave'] = [r.model_dump(exclude_none=True) for r in job.requirements if r.ismusthave]
+            job_dict['desirable'] = [r.model_dump(exclude_none=True) for r in job.requirements if not r.ismusthave]
+            if job.due_date:
+                days_left = (job.due_date - date.today()).days
+                job_dict['days_left'] = f"{days_left}d" if days_left >= 0 else f"{-days_left}d"
             else:
-                job_copy['days_left'] = "None"
-            self.jobs_list.append(job_copy)
+                job_dict['days_left'] = "None"
+            self.jobs_list.append(job_dict)
 
         # Define preferred column order
         self.preferred_column_order = [
