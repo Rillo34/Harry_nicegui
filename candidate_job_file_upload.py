@@ -114,32 +114,32 @@ def main_page():
                 requirements_section = RequirementSection(controller, ui.card().classes('shadow-lg p-4 w-96 t-4'))  # Instantiate here
 
 
-        with ui.column().classes('w-400 p-4'):
-            with ui.card().classes('shadow-lg p-4 w-full mt-4'):
-                with ui.row().classes("w-full justify-between gap-2"):
-                    ui.label('Candidates').classes('text-lg font-bold mb-2')
-                    job_card = ui.card().classes('shadow-md p-4 w-1/4 mt-4')
-                    # job_id_input = ui.input(label='Job-ID', value=controller.job_id).props('readonly')
-                    # ui.label('Välj Shortlist Size').classes('text-lg font-bold')
-                    shortlist_size = ui.select(
-                        options=[1, 3, 5, 10, 20],
-                        value=controller.shortlist_size,
-                        label='Shortlist size',
-                        on_change=on_shortlist_change
-                    ).classes("w-[150px] mt-2")
-                    def on_checkbox_change(e):
-                            ui.notify(f'Checkbox is now {str(e.value)}')
-                    c1 = ui.checkbox('Include internal candidates', on_change=on_checkbox_change)
-                    # Här kan du ha en tom rad för filter senare
-                    Reeval_button =ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white').on('click', lambda e: re_evaluate()).props('disabled')
-                filter_container = ui.row().classes("flex flex-wrap gap-4")
-                table_container = ui.element('div').classes('w-full max-w-[1400px] mx-auto')                
-                initial_candidate_data = comp_candidate_table1.get_initial_data()
-                with table_container:
-                    candidate_ui_table = comp_candidate_table1.CandidateTable(initial_candidate_data)
+        # with ui.column().classes('w-2/3 p-4'):
+        #     with ui.card().classes('shadow-lg p-4 w-full mt-4'):
+        #         with ui.row().classes("w-full justify-between gap-2"):
+        #             ui.label('Candidates').classes('text-lg font-bold mb-2')
+        #             job_card = ui.card().classes('shadow-md p-4 w-1/4 mt-4')
+        #             # job_id_input = ui.input(label='Job-ID', value=controller.job_id).props('readonly')
+        #             # ui.label('Välj Shortlist Size').classes('text-lg font-bold')
+        #             shortlist_size = ui.select(
+        #                 options=[1, 3, 5, 10, 20],
+        #                 value=controller.shortlist_size,
+        #                 label='Shortlist size',
+        #                 on_change=on_shortlist_change
+        #             ).classes("w-[150px] mt-2")
+        #             def on_checkbox_change(e):
+        #                     ui.notify(f'Checkbox is now {str(e.value)}')
+        #             c1 = ui.checkbox('Include internal candidates', on_change=on_checkbox_change)
+        #             # Här kan du ha en tom rad för filter senare
+        #             Reeval_button =ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white').on('click', lambda e: re_evaluate()).props('disabled')
+        #         filter_container = ui.row().classes("flex flex-wrap gap-4")
+        #         table_container = ui.element('div').classes('w-full max-w-[1400px] mx-auto')                
+        #         initial_candidate_data = comp_candidate_table1.get_initial_data()
+        #         with table_container:
+        #             candidate_ui_table = comp_candidate_table1.CandidateTable(initial_candidate_data)
 
 ui.page('/')(main_page)
-ui.run(port=8005)
+ui.run(port=8004, reload=False)
 
 
 candidate_list = [CandidateResultLong(candidate_id='CAND_004', name='Sheila Myers', combined_score=0.65, summary='Would surface environment music over trip.', assignment='Special effects artist, Ball-Johnson', location='Robertville, Bahamas', internal=False, years_exp='3-5', education="Master's, Computer Science", requirements=[RequirementResult(reqname='7+ years CFO experience', status='NO', ismusthave=True, source='JD'), RequirementResult(reqname='High-growth tech experience', status='MAYBE', ismusthave=True, source='JD'), RequirementResult(reqname='M&A experience', status='NO', ismusthave=True, source='JD'), RequirementResult(reqname='Financial data translation', status='MAYBE', ismusthave=True, source='JD'), RequirementResult(reqname="Master's degree in finance", status='YES', ismusthave=True, source='JD')]), CandidateResultLong(candidate_id='CAND_002', name='Bryan Berry', combined_score=0.47, summary='Adult ask industry lay indicate early number improve.', assignment='Emergency planning/management officer, Brown, Garcia and Herrera', location='West Rachel, Saint Vincent and the Grenadines', internal=False, years_exp='0-2', education='PhD, AI & Machine Learning', requirements=[RequirementResult(reqname='7+ years CFO experience', status='YES', ismusthave=True, source='JD'), RequirementResult(reqname='High-growth tech experience', status='NO', ismusthave=True, source='JD'), RequirementResult(reqname='M&A experience', status='MAYBE', ismusthave=True, source='JD'), RequirementResult(reqname='Financial data translation', status='MAYBE', ismusthave=True, source='JD'), RequirementResult(reqname="Master's degree in finance", status='NO', ismusthave=True, source='JD')]), CandidateResultLong(candidate_id='CAND_003', name='Denise Russell', combined_score=0.44, summary='Yeah job Republican control citizen lay middle relationship understand mean how stage produce.', assignment='Geophysicist/field seismologist, Marquez, Obrien and Ramos', location='Josephstad, Saint Vincent and the Grenadines', internal=False, years_exp='15+', education="Bachelor's, Information Systems", requirements=[RequirementResult(reqname='7+ years CFO experience', status='NO', ismusthave=True, source='JD'), RequirementResult(reqname='High-growth tech experience', status='NO', ismusthave=True, source='JD'), RequirementResult(reqname='M&A experience', status='MAYBE', ismusthave=True, source='JD'), RequirementResult(reqname='Financial data translation', status='MAYBE', ismusthave=True, source='JD'), RequirementResult(reqname="Master's degree in finance", status='MAYBE', ismusthave=True, source='JD')]), CandidateResultLong(candidate_id='CAND_001', name=None, combined_score=0.37, summary=None, assignment=None, location=None, internal=False, years_exp=None, education=None, requirements=[])]

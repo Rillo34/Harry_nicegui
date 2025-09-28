@@ -2,15 +2,15 @@ from nicegui import ui
 from models import RequirementPayload
 
 class RequirementSection:
-    def __init__(self, controller, container):
+    def __init__(self, controller):
         self.controller = controller
-        self.container = container
+        # self.container = container
         self.list_of_requirements = []
         self._setup_ui()
 
     def _setup_ui(self):
-        with self.container:
-            ui.label('Lägg till krav').classes('text-lg font-bold')
+        with ui.card().classes('shadow-lg p-4 w-96 t-4'):         
+            ui.label('Add requirements').classes('text-lg font-bold')
             with ui.row().classes('w-full items-center mt-2'):
                 self.requirement_input = ui.input(placeholder='Skriv in ett krav...').classes('flex-grow')
                 self.is_must_have = ui.switch(value=False).classes('mx-2').props('color=green')

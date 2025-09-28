@@ -8,7 +8,7 @@ class LeftDrawer:
         with drawer:
             # ui.label('Navigation').classes('text-xl font-bold mb-4')
             ui.button('HOME', icon='home', on_click=lambda: ui.notify('CandidateJob')).classes('w-full justify-start mb-2 text-lg bg-orange text-black')
-            ui.button('CandidateJob', icon='upload', on_click=lambda: ui.notify('CandidateJob')).classes('w-full justify-start mb-2 text-lg')
+            ui.button('CandidateJob', icon='upload', on_click=lambda: ui.navigate.to('/candidatejobs')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Candidates', icon='people', on_click=lambda: ui.notify('Candidates')).classes('w-full justify-start mb-2 text-lg')
             # ui.button('Jobs', icon='work', on_click=lambda: ui.notify('Jobs')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Jobs', icon='work', on_click=lambda: ui.navigate.to('/jobs')).classes('w-full justify-start mb-2 text-lg')
@@ -24,5 +24,4 @@ class LeftDrawer:
                 ui.label('Harry').classes('text-lg font-medium ml-2')
         
 
-# 
-ui.run(port=8005)
+#

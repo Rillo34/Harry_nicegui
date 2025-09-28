@@ -17,24 +17,6 @@ from pydantic import BaseModel
 from nicegui import ui
 fake = Faker()
 
-# # --- Del 1: Nödvändiga modeller ---
-# class RequirementResult(BaseModel):
-#     reqname: str
-#     status: str
-#     ismusthave: bool
-#     source: str
-
-# class CandidateResultLong(BaseModel):
-#     candidate_id: str
-#     name: str
-#     combined_score: float
-#     summary: str
-#     assignment: str
-#     location: str
-#     internal: bool
-#     years_exp: str
-#     education: str
-#     requirements: List[RequirementResult]
 
 # --- Del 2: CandidateTable-klass (med update-metod och musthave/desirable) ---
 class CandidateTable:
@@ -334,14 +316,14 @@ def get_new_dummy_data() -> List[CandidateResultLong]:
             ])
     ]
 
-@ui.page('/')
-def main_page():
-    ui.label('Candidate Table').classes('text-2xl font-bold p-4')
-    initial_candidates = get_initial_data()
-    CandidateTable(candidates=initial_candidates)
+# @ui.page('/')
+# def main_page():
+#     ui.label('Candidate Table').classes('text-2xl font-bold p-4')
+#     initial_candidates = get_initial_data()
+#     CandidateTable(candidates=initial_candidates)
    
 
-ui.run(port=8004, reload=False)  # Använder reload=False för stabilare felsökning
+# ui.run(port=8004, reload=False)  # Använder reload=False för stabilare felsökning
     
 
 

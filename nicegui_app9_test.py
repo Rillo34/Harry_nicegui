@@ -4,7 +4,7 @@ import uuid
 import asyncio
 import sys
 import os
-import candidate_table1
+import comp_candidate_table1
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 from models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult
 

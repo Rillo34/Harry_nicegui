@@ -1,12 +1,16 @@
 import nicegui
 import json
 import requests
+import httpx
 from nicegui import events, ui
-# from models import RequirementPayload, EvaluateResponse
+from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse
 from pydantic import parse_obj_as
 
 
 class APIController:
+    def __init__(self, controller):
+        self.controller = controller
+
     def get_all_jobs(self):
         try:
             response = requests.get(
@@ -21,7 +25,115 @@ class APIController:
         except Exception as e:
             print('Fel vid API-anrop:', e)
             return []
+        
+    async def files_to_backend(self):
+        files_uploaded = self.controller.uploaded_job_description or self.controller.uploaded_cvs
 
+        if not files_uploaded:
+            ui.notify(f'You must upload CVs and Job Description', type='info')
+        else:
+            print("requirements SOM SKICKAS TILL BE i send to backend: \n", self.controller.requirements)
+            requirement_dicts = [r.dict() for r in self.controller.requirements]
+            print("shortlist size: ”", self.controller.shortlist_size)
+            files_to_send = [
+                ('jd_file', (
+                    self.controller.uploaded_job_description.name,
+                    self.controller.uploaded_job_description.content,
+                    self.controller.uploaded_job_description.type
+                ))
+            ]
+            files_to_send.extend(self.controller.uploaded_cvs)
+            data_to_send = {
+                'shortlist_size': self.controller.shortlist_size,
+                'requirements': json.dumps(requirement_dicts)
+            }
+            try:
+                response = requests.post(
+                    'http://127.0.0.1:8080/upload-files',  # byt till din riktiga BE-URL
+                    files=files_to_send, # <-- Skickar alla filer i en enda dictionary
+                    data=data_to_send
+                )
+                print("Responsens text: \n \n", response.text)
+                if response.status_code != 200:
+                    return False, f'Fel från backend: {response.status_code} - {response.text}'
+                
+                print("Raw response:", response)   
+                response_data = EvaluateResponse(**response.json())
+                new_requirements = response_data.updated_requirements
+                
+                self.controller.requirements = new_requirements
+                self.controller.job_id = response_data.job.job_id
+                self.controller.job_description = response_data.job.description
+                self.controller.customer = response_data.job.customer
+                self.controller.candidates = response_data.candidates
+                
+            except Exception as e:
+                return False, f'Ett fel uppstod: {e}'
+            
+    
+    async def api_resize(self):
+        resize_payload = ReSize(
+            job_id=self.controller.job_id,
+            shortlist_size=self.controller.shortlist_size
+        )
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    'http://127.0.0.1:8080/choose-shortlist-size',
+                    json=resize_payload.dict()
+                )
+
+            if response.status_code == 200:
+                resize_response = ReSizeResponse(**response.json())
+
+                # Uppdatera controller med nya data
+                self.controller.job_id = resize_response.job_id
+                self.controller.shortlist_size = resize_response.shortlist_size
+                self.controller.candidates = resize_response.candidates
+
+                print("Resize lyckades")
+                return resize_response
+            else:
+                ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+                return None
+
+        except Exception as e:
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+        
+    async def api_reevaluate(self):
+        reeval_payload = ReEvaluateRequest(
+            job_id=self.controller.job_id,
+            shortlist_size=self.controller.shortlist_size.value,
+            requirements=self.controller.requirements
+        )
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    'http://127.0.0.1:8080/re-evaluate',
+                    json=reeval_payload.dict()
+                )
+
+            if response.status_code == 200:
+                reeval_response = ReEvaluateResponse(**response.json())
+
+                # Uppdatera controller med nya data
+                self.controller.job_id = reeval_response.job_id
+                self.controller.candidates = reeval_response.candidates
+
+                print("Reeval lyckades")
+                return reeval_response
+            else:
+                ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+                return None
+
+        except Exception as e:
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+        
+        
 
 class UploadController:
     def __init__(self):
@@ -32,6 +144,7 @@ class UploadController:
         self.uploaded_job_description = None  # ska vara NiceGUI UploadedFile
         self.uploaded_cvs = []  # lista av UploadedFile
         self.shortlist_size = 3  # default
+        self.candidates = []
 
     def add_requirement(self, requirement_object):
         """Lägger till ett nytt krav i listan om det inte redan finns."""
