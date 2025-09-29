@@ -15,16 +15,17 @@ class FileUploadSection:
     def __init__(self, controller):
         self.controller = controller  # ✅ Spara controller som instansvariabel
         with ui.column().classes('w-1/3 p-4'):
-            file_section_expansion = ui.expansion('File upload', icon='folder').classes('w-96')
+            file_section_expansion = ui.expansion('FILE UPLOAD', icon='folder').classes('w-96 font-bold')
             with file_section_expansion:
                 # Job description upload
                 with ui.card().classes('shadow-lg p-4 w-96'):
-                    ui.label('Upload JD').classes('text-lg font-bold')
+                    ui.label('Upload JD').classes('text-sm font-medium')
                     ui.upload(on_upload=self.handle_jd_upload, auto_upload=True)
                 # CV upload
                 with ui.card().classes('shadow-lg p-4 w-96'):
-                    ui.label('Upload CVs').classes('text-lg font-bold')
-                    ui.upload(on_multi_upload=self.handle_cv_upload, auto_upload=True, multiple=True)     
+                    ui.label('Upload CVs').classes('text-sm font-medium')
+                    # ui.upload(on_multi_upload=self.handle_cv_upload, auto_upload=True, multiple=True)     
+                    ui.upload(on_multi_upload=self.handle_cv_upload, auto_upload=True, multiple=True)   
 
     async def handle_jd_upload(self, e: events.UploadEventArguments):
         self.controller.uploaded_job_description = e

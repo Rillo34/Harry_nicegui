@@ -1,20 +1,15 @@
 from nicegui import ui
-from typing import List, Dict
-from datetime import date
-import sys, os
-from typing import Dict, List, Set
-from pathlib import Path
+from pydantic import BaseModel
+from typing import List, Optional, Literal, Dict
+from datetime import datetime, date
+import uuid
 sys.path.append(str(Path(__file__).resolve().parent.parent / 'backend'))
-from nicegui import ui
-from typing import List, Dict
-from datetime import date
-from models import CandidateResultLong, RequirementResult
+from models import RequirementResult, CandidateResultLong
+from faker import Faker
 
-from nicegui import ui
-from typing import List, Dict
-from datetime import date
-from models import CandidateResultLong, RequirementResult
+fake = Faker()
 
+# Models imported from models.py
 
 
 class CandidateTable:
@@ -79,42 +74,33 @@ class CandidateTable:
             }
         ])
 
-        self.musthave_req_names = sorted({
-            req["reqname"] for cand in self.candidates_list for req in cand["musthave"]
+        self.req_names: List[str] = sorted({
+            req["reqname"]
+            for cand in self.candidates_list
+            for req in cand["requirements"]
         })
-        self.desirable_req_names = sorted({
-            req["reqname"] for cand in self.candidates_list for req in cand["desirable"]
-        })
-        self.filters: List[str] = []
+        self.filters: Dict[str, List[str]] = {req_name: [] for req_name in self.req_names}
         self.search_term = ""
-        self.filter_section_expansion = None
-        # Initialize visible columns (all except actions, which is always visible)
-        self.visible_columns = [col["name"] for col in self.columns if col["name"] != "actions"]
 
         self._build_ui()
 
     def _build_ui(self):
-        
-        self.filter_section_expansion = ui.expansion('REQUIREMENTS FILTER', icon='extension').classes('w-full font-bold')
-        with self.filter_section_expansion:
-            # ui.label("Filter by Requirements").classes("text-lg font-bold")
-            with ui.row().classes('flex flex-wrap gap-2'):
-                ui.label("Must-have").classes("text-md font-semibold")
-                for req_name in self.musthave_req_names:
-                    ui.chip(
-                        req_name,
-                        on_click=lambda e, rn=req_name: self._toggle_filter(rn)
-                    ).props(f"color={'green' if req_name in self.filters else 'grey'} outline").classes('cursor-pointer')
-            with ui.row().classes('flex flex-wrap gap-2 mt-2'):
-                ui.label("Desirable").classes("text-md font-semibold")
-                for req_name in self.desirable_req_names:
-                    ui.chip(
-                        req_name,
-                        on_click=lambda e, rn=req_name: self._toggle_filter(rn)
-                    ).props(f"color={'green' if req_name in self.filters else 'grey'} outline").classes('cursor-pointer')
+        with ui.row().classes('items-center w-full'):
+            ui.label('Candidate Table').classes('text-2xl font-bold p-4')
+            ui.input(
+                placeholder='Search candidates...',
+                on_change=lambda e: self._update_search(e.value)
+            ).classes('w-64')
+
+        filter_section_expansion = ui.expansion('Requirements', icon='extension').classes('w-full')
+        with filter_section_expansion:
+            ui.label("Filter by Requirements").classes("text-lg font-bold")
+            self.filter_container = ui.row().classes("flex flex-wrap gap-4")
+            with self.filter_container:
+                self._render_filters()
 
         self.table = ui.table(
-            columns=[col for col in self.columns if col["name"] in self.visible_columns + ["actions"]],
+            columns=self.columns,
             rows=self.candidates_list,
             row_key="candidate_id",
             pagination={'sortBy': 'combined_score', 'descending': True}
@@ -189,12 +175,14 @@ class CandidateTable:
                                 <q-item clickable v-close-popup
                                         @click="console.log('Emitting delete for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'delete', row_id: props.row.candidate_id})">
                                     <q-item-section>Ta bort</q-item-section>
-                                </q-list>
+                                </q-item>
+                            </q-list>
                         </q-menu>
                     </q-btn>
                 </q-td>
                 '''
             )
+            # Custom sort for job_availability by absolute value
             self.table.add_slot(
                 "header-cell-job_availability",
                 r'''
@@ -209,6 +197,7 @@ class CandidateTable:
             )
             self.table.on('menu_action', self._on_action)
             self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))
+            # Add custom sort function in JavaScript
             ui.add_head_html('''
                 <script>
                 function sortByAbsJobAvailability(props) {
@@ -226,8 +215,39 @@ class CandidateTable:
                 </script>
             ''')
 
+    def update(self, new_candidates: List[CandidateResultLong]):
+        """Update the table with new candidates, refreshing data and UI."""
+        self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in new_candidates}
+        self.candidates_list = []
+        for cand in self.candidates_map.values():
+            cand_copy = cand.copy()
+            cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
+            cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
+            cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"
+            if cand_copy.get('available_from'):
+                days = (cand_copy['available_from'] - self.fictive_start_date).days
+                cand_copy['job_availability'] = f"{days}d"
+            else:
+                cand_copy['job_availability'] = "N/A"
+            self.candidates_list.append(cand_copy)
+
+        print(f"Updated job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
+        self.req_names = sorted({
+            req["reqname"]
+            for cand in self.candidates_list
+            for req in cand["requirements"]
+        })
+        self.filters = {req_name: [] for req_name in self.req_names}
+        self.search_term = ""
+
+        self.table.rows = self.candidates_list
+        self.filter_container.clear()
+        with self.filter_container:
+            self._render_filters()
+        self.apply_filters()
+
     def _on_action(self, event):
-        """Handle events from the action menu."""
+        """Hanterar händelser från åtgärdsmenyn."""
         print("--- _on_action triggered ---")
         print(f"Event args: {event.args}")
         payload = event.args
@@ -249,74 +269,17 @@ class CandidateTable:
         elif action == 'delete':
             ui.notify(f"Tar bort {candidate_name}", type='negative')
 
-    def _update_columns(self, hidden_columns: List[str]):
-        """Hide selected columns and refresh the table."""
-        self.visible_columns = [col["name"] for col in self.columns if col["name"] not in hidden_columns and col["name"] != "actions"]
-        self.table.columns = [col for col in self.columns if col["name"] in self.visible_columns + ["actions"]]
-        self.table.update()
-        print(f"Visible columns updated: {self.visible_columns}")
+    def _render_filters(self):
+        for req_name in self.req_names:
+            with ui.column():
+                ui.label(req_name).classes("text-sm")
+                ui.select(
+                    ["YES", "NO", "MAYBE"], multiple=True, value=self.filters[req_name],
+                    on_change=lambda e, rn=req_name: self._update_filter(rn, e.value)
+                ).classes("w-40").props('dense options-dense')
 
-    def update(self, new_candidates: List[CandidateResultLong]):
-        """Update the table with new candidates, refreshing data and UI."""
-        self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in new_candidates}
-        self.candidates_list = []
-        for cand in self.candidates_map.values():
-            cand_copy = cand.copy()
-            cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
-            cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
-            cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"
-            if cand_copy.get('available_from'):
-                days = (cand_copy['available_from'] - self.fictive_start_date).days
-                cand_copy['job_availability'] = f"{days}d"
-            else:
-                cand_copy['job_availability'] = "N/A"
-            self.candidates_list.append(cand_copy)
-
-        print(f"Updated job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
-        self.musthave_req_names = sorted({
-            req["reqname"] for cand in self.candidates_list for req in cand["musthave"]
-        })
-        self.desirable_req_names = sorted({
-            req["reqname"] for cand in self.candidates_list for req in cand["desirable"]
-        })
-        self.filters = []
-        self.search_term = ""
-
-        self.table.rows = self.candidates_list
-        self.table.columns = [col for col in self.columns if col["name"] in self.visible_columns + ["actions"]]
-        if self.filter_section_expansion:
-            self._rebuild_filters()
-        self.apply_filters()
-
-    def _rebuild_filters(self):
-        """Rebuild the chip filters after updating candidates."""
-        if self.filter_section_expansion:
-            with self.filter_section_expansion:
-                self.filter_section_expansion.clear()
-                ui.label("Filter by Requirements").classes("text-lg font-bold")
-                with ui.row().classes('flex flex-wrap gap-2'):
-                    ui.label("Must-have").classes("text-md font-semibold")
-                    for req_name in self.musthave_req_names:
-                        ui.chip(
-                            req_name,
-                            on_click=lambda e, rn=req_name: self._toggle_filter(rn)
-                        ).props(f"color={'green' if req_name in self.filters else 'grey'} outline").classes('cursor-pointer')
-                with ui.row().classes('flex flex-wrap gap-2 mt-2'):
-                    ui.label("Desirable").classes("text-md font-semibold")
-                    for req_name in self.desirable_req_names:
-                        ui.chip(
-                            req_name,
-                            on_click=lambda e, rn=req_name: self._toggle_filter(rn)
-                        ).props(f"color={'green' if req_name in self.filters else 'grey'} outline").classes('cursor-pointer')
-        self.apply_filters()
-
-    def _toggle_filter(self, req_name: str):
-        """Toggle a requirement filter and update chip color."""
-        if req_name in self.filters:
-            self.filters.remove(req_name)
-        else:
-            self.filters.append(req_name)
-        self._rebuild_filters()
+    def _update_filter(self, req_name: str, values: List[str]):
+        self.filters[req_name] = values
         self.apply_filters()
 
     def _update_search(self, value: str):
@@ -327,13 +290,16 @@ class CandidateTable:
         filtered_rows = []
         for cand in self.candidates_list:
             include = True
-            for req_name in self.filters:
-                req_status = next(
-                    (req["status"] for req in cand["requirements"] if req["reqname"] == req_name), None
-                )
-                if req_status != "YES":
-                    include = False
-                    break
+            # Apply requirement filters
+            for req_name, selected_statuses in self.filters.items():
+                if selected_statuses:
+                    req_status = next(
+                        (req["status"] for req in cand["requirements"] if req["reqname"] == req_name), None
+                    )
+                    if req_status not in selected_statuses:
+                        include = False
+                        break
+            # Apply search filter
             if include and self.search_term:
                 search_match = False
                 for field in ['candidate_id', 'name', 'combined_score', 'assignment', 'location', 'years_exp', 'status', 'job_availability']:
@@ -475,8 +441,8 @@ def get_new_dummy_data() -> List[CandidateResultLong]:
 def main_page():
     initial_candidates = get_initial_data()
     table = CandidateTable(candidates=initial_candidates)
-    # input("get new candidates")
-    # new_candidates =get_new_dummy_data()
-    # table.update(new_candidates)
+    input("get new candidates")
+    new_candidates =get_new_dummy_data()
+    table.update(new_candidates)
 
 ui.run(port=8004, reload=True)

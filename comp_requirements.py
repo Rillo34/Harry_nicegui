@@ -9,13 +9,15 @@ class RequirementSection:
         self._setup_ui()
 
     def _setup_ui(self):
-        with ui.card().classes('shadow-lg p-4 w-96 t-4'):         
-            ui.label('Add requirements').classes('text-lg font-bold')
+        with ui.card().classes('shadow-lg p-4 w-96 t-4'):
+            with ui.row().classes('items-center gap-2'):
+                ui.icon('edit').classes('text-lg')
+                ui.label('EDIT REQUIREMENTS').classes('text-md font-bold')
             with ui.row().classes('w-full items-center mt-2'):
-                self.requirement_input = ui.input(placeholder='Skriv in ett krav...').classes('flex-grow')
+                self.requirement_input = ui.input(placeholder='Type requirement...').classes('flex-grow')
                 self.is_must_have = ui.switch(value=False).classes('mx-2').props('color=green')
                 ui.label('Must-Have').classes('mr-4 text-sm text-green-700')
-                ui.button('Lägg till', on_click=self._handle_add).classes('bg-blue-500 text-white')
+                ui.button('Add requirement', on_click=self._handle_add).classes('bg-blue-500 text-white')
             self.requirements_container = ui.column().classes('mt-4 w-full border rounded p-2 min-h-[50px]')
             self.refresh_requirements()
 
@@ -56,8 +58,8 @@ class RequirementSection:
             # print("controllerns requirements: ", self.controller.requirements)
             for req in self.controller.requirements:
                 # print(f"Rendering requirement: {req.reqname}, must_have={req.ismusthave}")
-                with ui.row().classes('w-full items-center border-b p-1'):
+                with ui.row().classes('w-full items-center border-b p-0 min-h-[32px]'):
                     ui.switch(value=req.ismusthave, on_change=lambda e, r=req: self.toggle_requirement(r.reqname)).classes('mr-2').props('color=green')
-                    ui.label(req.reqname).classes('flex-grow ' + ('font-bold text-green-700' if req.ismusthave else 'text-gray-600'))
+                    ui.label(req.reqname).classes('flex-grow ' + ('text-green-700' if req.ismusthave else 'text-gray-600'))
                     ui.label('Must-Have' if req.ismusthave else 'Desirable').classes('mr-4 text-sm ' + ('text-green-700' if req.ismusthave else 'text-gray-500'))
                     ui.button(icon='delete', on_click=lambda e, r=req: self.remove_requirement(r.reqname)).props('flat round size=sm color=red').classes('ml-auto')

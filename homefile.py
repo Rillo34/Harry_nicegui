@@ -3,7 +3,9 @@ from comp_left_drawer import LeftDrawer
 from comp_joblist import JobList
 from comp_requirements import RequirementSection
 from comp_file_upload import FileUploadSection
-from comp_candidate_table1 import CandidateTable, get_initial_data
+# from comp_candidate_table1 import CandidateTable, get_initial_data
+from comp_candidate_table1_new import CandidateTable, get_initial_data
+
 from api_fe import APIController, UploadController
 from models import JobRequest
 
@@ -36,7 +38,6 @@ def jobs_page():
 @ui.page('/candidatejobs')
 def candidate_jobs_page():
     drawer = LeftDrawer()
-
     # Hela sidan som row
     with ui.row().classes('w-full h-screen items-start'):
 
@@ -51,19 +52,19 @@ def candidate_jobs_page():
         # Höger kolumn: kandidater
         with ui.column().classes('flex-1 p-4'):
             # Översta rad med label, job-card, knappar
-            with ui.row().classes("w-full justify-between gap-2"):
-                ui.label('Candidates').classes('text-lg font-bold mb-2')
-                with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
-                    ui.label(ui_controller.job_id)
-                shortlist_size = ui.select(
-                    options=[1, 3, 5, 10, 20],
-                    value=ui_controller.shortlist_size,
-                    label='Shortlist size',
-                    on_change=lambda e: resize(e.value)
-                ).classes("w-[150px] mt-2")
-                Reeval_button = ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white') \
-                    .on('click', lambda e: re_evaluate()) \
-                    .props('enabled')
+            # with ui.row().classes("w-full justify-between gap-2"):
+            #     ui.label('Candidates').classes('text-lg font-bold mb-2')
+            #     with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
+            #         ui.label(ui_controller.job_id)
+            #     shortlist_size = ui.select(
+            #         options=[1, 3, 5, 10, 20],
+            #         value=ui_controller.shortlist_size,
+            #         label='Shortlist size',
+            #         on_change=lambda e: resize(e.value)
+            #     ).classes("w-[150px] mt-2")
+            #     Reeval_button = ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white') \
+            #         .on('click', lambda e: re_evaluate()) \
+            #         .props('enabled')
 
             # Tabellen placeras direkt i kolumnen
             initial_candidate_data = get_initial_data()
