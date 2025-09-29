@@ -94,7 +94,32 @@ class CandidateTable:
         self._build_ui()
 
     def _build_ui(self):
-        
+        with ui.row().classes('items-center w-full justify-between'):
+            ui.label('Candidate Table').classes('text-1xl font-bold p-4')
+            COMMON = "w-64 text-sm [&_.q-field__label]:text-sm [&_.q-field__label]:font-small [&_.q-field__input]:text-sm [&_.q-field__native]:text-sm"
+            with ui.row().classes('items-center gap-4'):
+                ui.input(
+                    label="Search candidates",
+                    on_change=lambda e: self._update_search(e.value)
+                ).classes(COMMON)
+
+                ui.select(
+                    options=[col["name"] for col in self.columns if col["name"] != "actions"],
+                    label="Hide/select Columns",
+                    multiple=True,
+                    on_change=lambda e: self._update_columns(e.value)
+                ).classes(COMMON)
+
+                #     shortlist_size = ui.select(
+                #     options=[1, 3, 5, 10, 20],
+                #     value=3,
+                #     label='Shortlist size',
+                #     on_change=lambda e: resize(e.value)
+                # ).classes(COMMON)
+                # Reeval_button = ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white') \
+                #     .on('click', lambda e: re_evaluate()) \
+                #     .props('enabled')
+
         self.filter_section_expansion = ui.expansion('REQUIREMENTS FILTER', icon='extension').classes('w-full font-bold')
         with self.filter_section_expansion:
             # ui.label("Filter by Requirements").classes("text-lg font-bold")
