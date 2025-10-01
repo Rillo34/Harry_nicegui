@@ -9,17 +9,20 @@ class RequirementSection:
         self._setup_ui()
 
     def _setup_ui(self):
-        with ui.card().classes('shadow-lg p-4 w-96 t-4'):
-            with ui.row().classes('items-center gap-2'):
-                ui.icon('edit').classes('text-lg')
-                ui.label('EDIT REQUIREMENTS').classes('text-md font-bold')
-            with ui.row().classes('w-full items-center mt-2'):
-                self.requirement_input = ui.input(placeholder='Type requirement...').classes('flex-grow')
-                self.is_must_have = ui.switch(value=False).classes('mx-2').props('color=green')
-                ui.label('Must-Have').classes('mr-4 text-sm text-green-700')
-                ui.button('Add requirement', on_click=self._handle_add).classes('bg-blue-500 text-white')
-            self.requirements_container = ui.column().classes('mt-4 w-full border rounded p-2 min-h-[50px]')
-            self.refresh_requirements()
+        with ui.expansion('REQUIREMENT SECTION', icon='edit').classes('w-96 font-bold'):
+            with ui.card().classes('shadow-lg p-4 bg-gray-50 border border-gray-300 rounded'):
+                with ui.row().classes('items-center gap-2 mb-2'):
+                    ui.icon('edit').classes('text-lg text-black-3200')
+                    ui.label('EDIT REQUIREMENTS').classes('text-md font-bold text-black-800')
+
+                with ui.row().classes('w-full items-center mt-2'):
+                    self.requirement_input = ui.input(placeholder='Type requirement...').classes('flex-grow')
+                    self.is_must_have = ui.switch(value=False).classes('mx-2').props('color=green')
+                    ui.label('Must-Have').classes('mr-4 text-sm text-green-700')
+                    ui.button('Add requirement', on_click=self._handle_add).classes('bg-blue-500 text-white')
+
+                self.requirements_container = ui.column().classes('mt-4 w-full border border-gray-300 rounded p-2 bg-white')
+                self.refresh_requirements()
 
     def _handle_add(self):
         requirement = self.requirement_input.value.strip()
@@ -58,8 +61,36 @@ class RequirementSection:
             # print("controllerns requirements: ", self.controller.requirements)
             for req in self.controller.requirements:
                 # print(f"Rendering requirement: {req.reqname}, must_have={req.ismusthave}")
-                with ui.row().classes('w-full items-center border-b p-0 min-h-[32px]'):
-                    ui.switch(value=req.ismusthave, on_change=lambda e, r=req: self.toggle_requirement(r.reqname)).classes('mr-2').props('color=green')
-                    ui.label(req.reqname).classes('flex-grow ' + ('text-green-700' if req.ismusthave else 'text-gray-600'))
-                    ui.label('Must-Have' if req.ismusthave else 'Desirable').classes('mr-4 text-sm ' + ('text-green-700' if req.ismusthave else 'text-gray-500'))
-                    ui.button(icon='delete', on_click=lambda e, r=req: self.remove_requirement(r.reqname)).props('flat round size=sm color=red').classes('ml-auto')
+                # with ui.row().classes('w-full items-center border-b p-0 min-h-[32px]'):
+                #     ui.switch(value=req.ismusthave, on_change=lambda e, r=req: self.toggle_requirement(r.reqname)).classes('mr-2').props('color=green')
+                    
+                #     ui.label('Must-Have' if req.ismusthave else 'Desirable').classes('mr-4 text-sm ' + ('text-green-700' if req.ismusthave else 'text-gray-500'))
+                #     ui.button(icon='delete', on_click=lambda e, r=req: self.remove_requirement(r.reqname)).props('flat round size=sm color=red').classes('ml-auto')
+                # ui.label(req.reqname).classes('flex-grow ' + ('text-green-700' if req.ismusthave else 'text-gray-600'))
+                with ui.column().classes('w-full border-b p-0'):
+                    with ui.row().classes('w-full items-center justify-between min-h-[32px]'):
+                        # Vänster sida (toggle + label) i en egen row
+                        with ui.row().classes('items-center gap-2'):
+                            ui.switch(
+                                value=req.ismusthave,
+                                on_change=lambda e, r=req: self.toggle_requirement(r.reqname)
+                            ).props('color=green')
+
+                            ui.label(
+                                'Must-Have' if req.ismusthave else 'Desirable'
+                            ).classes(
+                                'text-sm ' + ('text-green-700' if req.ismusthave else 'text-gray-500')
+                            )
+
+                        # Höger sida: delete-knappen
+                        ui.button(
+                            icon='delete',
+                            on_click=lambda e, r=req: self.remove_requirement(r.reqname)
+                        ).props('flat round size=sm color=red')
+
+                    # Rad 2: själva namnet
+                    ui.label(
+                        req.reqname
+                    ).classes(
+                        'text-sm px-1 ' + ('text-green-700' if req.ismusthave else 'text-gray-600')
+                    )

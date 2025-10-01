@@ -95,20 +95,20 @@ class CandidateTable:
 
     def _build_ui(self):
         with ui.row().classes('items-center w-full justify-between'):
-            ui.label('Candidate Table').classes('text-1xl font-bold p-4')
+            # ui.label('Candidate Table').classes('text-1xl font-bold p-4')
             COMMON = "w-64 text-sm [&_.q-field__label]:text-sm [&_.q-field__label]:font-small [&_.q-field__input]:text-sm [&_.q-field__native]:text-sm"
-            with ui.row().classes('items-center gap-4'):
-                ui.input(
-                    label="Search candidates",
-                    on_change=lambda e: self._update_search(e.value)
-                ).classes(COMMON)
+            # with ui.row().classes('items-center gap-4'):
+                # ui.input(
+                #     label="Search candidates",
+                #     on_change=lambda e: self._update_search(e.value)
+                # ).classes(COMMON)
 
-                ui.select(
-                    options=[col["name"] for col in self.columns if col["name"] != "actions"],
-                    label="Hide/select Columns",
-                    multiple=True,
-                    on_change=lambda e: self._update_columns(e.value)
-                ).classes(COMMON)
+                # ui.select(
+                #     options=[col["name"] for col in self.columns if col["name"] != "actions"],
+                #     label="Hide/select Columns",
+                #     multiple=True,
+                #     on_change=lambda e: self._update_columns(e.value)
+                # ).classes(COMMON)
 
                 #     shortlist_size = ui.select(
                 #     options=[1, 3, 5, 10, 20],
@@ -122,14 +122,31 @@ class CandidateTable:
 
         self.filter_section_expansion = ui.expansion('REQUIREMENTS FILTER', icon='extension').classes('w-full font-bold')
         with self.filter_section_expansion:
-            # ui.label("Filter by Requirements").classes("text-lg font-bold")
-            with ui.row().classes('flex flex-wrap gap-2'):
+            with ui.row().classes('flex flex-wrap items-center gap-2 w-full'):
                 ui.label("Must-have").classes("text-md font-semibold")
                 for req_name in self.musthave_req_names:
                     ui.chip(
                         req_name,
                         on_click=lambda e, rn=req_name: self._toggle_filter(rn)
-                    ).props(f"color={'green' if req_name in self.filters else 'grey'} outline").classes('cursor-pointer')
+                    ).props(
+                        f"color={'green' if req_name in self.filters else 'grey'} outline"
+                    ).classes('cursor-pointer')
+
+                # Gör en "spacer" som trycker resten åt höger
+                ui.space().classes("ml-auto")
+
+                ui.input(
+                    label="Search candidates",
+                    on_change=lambda e: self._update_search(e.value)
+                ).classes(COMMON)
+
+                ui.select(
+                    options=[col["name"] for col in self.columns if col["name"] != "actions"],
+                    label="Hide/select Columns",
+                    multiple=True,
+                    on_change=lambda e: self._update_columns(e.value)
+                ).classes(COMMON)
+
             with ui.row().classes('flex flex-wrap gap-2 mt-2'):
                 ui.label("Desirable").classes("text-md font-semibold")
                 for req_name in self.desirable_req_names:
@@ -143,7 +160,7 @@ class CandidateTable:
             rows=self.candidates_list,
             row_key="candidate_id",
             pagination={'sortBy': 'combined_score', 'descending': True}
-        ).classes("w-full max-w-[1800px]")
+        ).classes("w-full") #classes("w-full max-w-[1800px]")
 
         with self.table:
             self.table.add_slot(
@@ -370,7 +387,7 @@ class CandidateTable:
             if include:
                 filtered_rows.append(cand)
         
-        print(f"Filtered rows: {[cand['name'] for cand in filtered_rows]}")
+        # print(f"Filtered rows: {[cand['name'] for cand in filtered_rows]}")
         self.table.rows = filtered_rows
         self.table.update()
 

@@ -14,18 +14,23 @@ fake = Faker()
 class FileUploadSection:
     def __init__(self, controller):
         self.controller = controller  # ✅ Spara controller som instansvariabel
-        with ui.column().classes('w-1/3 p-4'):
-            file_section_expansion = ui.expansion('FILE UPLOAD', icon='folder').classes('w-96 font-bold')
-            with file_section_expansion:
-                # Job description upload
-                with ui.card().classes('shadow-lg p-4 w-96'):
-                    ui.label('Upload JD').classes('text-sm font-medium')
-                    ui.upload(on_upload=self.handle_jd_upload, auto_upload=True)
-                # CV upload
-                with ui.card().classes('shadow-lg p-4 w-96'):
-                    ui.label('Upload CVs').classes('text-sm font-medium')
-                    # ui.upload(on_multi_upload=self.handle_cv_upload, auto_upload=True, multiple=True)     
-                    ui.upload(on_multi_upload=self.handle_cv_upload, auto_upload=True, multiple=True)   
+        with ui.expansion('FILE UPLOAD', icon='folder').classes('w-96 font-bold'):
+            with ui.card().classes('shadow-lg p-4 bg-gray-50 border border-gray-300 rounded'):
+                with ui.row().classes('items-center gap-2 mb-2'):
+                    ui.icon('folder').classes('text-lg text-blue-600')
+                    ui.label('Upload Files').classes('text-md font-bold text-blue-800')
+
+                with ui.column().classes('gap-4'):
+                    # Job description upload
+                    with ui.column().classes('border rounded p-3 bg-white'):
+                        ui.label('Upload JD').classes('text-sm font-medium text-gray-700 mb-1')
+                        ui.upload(on_upload=self.handle_jd_upload, auto_upload=True)
+
+                    # CV upload
+                    with ui.column().classes('border rounded p-3 bg-white'):
+                        ui.label('Upload CVs').classes('text-sm font-medium text-gray-700 mb-1')
+                        ui.upload(on_multi_upload=self.handle_cv_upload, auto_upload=True, multiple=True)
+                        
 
     async def handle_jd_upload(self, e: events.UploadEventArguments):
         self.controller.uploaded_job_description = e
