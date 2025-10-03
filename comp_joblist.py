@@ -212,15 +212,17 @@ class JobList:
             print(f"Could not find job with ID: {row_id}")
             return
 
-        job_title = row.get('title', 'Unknown')
-        print(f"Action: {action} on job: {job_title} (ID: {row_id})")
+        # job_title = row.get('title', 'Unknown')
+        print ("klick på:", row)
+        # print(f"Action: {action} on job: {job_title} (ID: {row_id})")
 
         if action == 'details':
-            ui.notify(f"Showing details for {job_title}", type='info')
+            ui.open(f'/candidatejobs?job_id={row.job_id}')
+            ui.notify(f"Showing details for {row.title}", type='info')
         elif action == 'edit':
-            ui.notify(f"Editing {job_title}", type='warning')
+            ui.notify(f"Editing {row.title}", type='warning')
         elif action == 'delete':
-            ui.notify(f"Deleting {job_title}", type='negative')
+            ui.notify(f"Deleting {row.title}", type='negative')
 
 # Sample data (all five jobs from provided input)
 def get_initial_jobs() -> List[JobRequest]:

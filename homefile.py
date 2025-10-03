@@ -5,6 +5,7 @@ from comp_requirements import RequirementSection
 from comp_file_upload import FileUploadSection
 # from comp_candidate_table1 import CandidateTable, get_initial_data
 from comp_candidate_table1_new import CandidateTable, get_initial_data
+from comp_jobcard_cand_jobs import JobCardCandidateJobs
 
 from api_fe import APIController, UploadController
 from models import JobRequest
@@ -36,17 +37,20 @@ def jobs_page():
 
 
 @ui.page('/candidatejobs')
-def candidate_jobs_page():
+def candidate_jobs_page(job_id: str = None):
+    print("Job ID from query:", job_id)
+    ui.label(f"Job ID: {job_id}")
     drawer = LeftDrawer()
     # Hela sidan som row
     with ui.row().classes('w-full h-screen items-start'):
-
         # Vänster kolumn: filuppladdning + knappar
+        ui_controller.job_id = job_id
         with ui.column().classes('w-96 p-4'):
-            with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
-                ui.label(f'Job ID: {self.controller.job_id}').classes('text-sm font-medium text-gray-700 mb-1')
-                ui.label(f'Job ID: {self.controller.job_id}').classes('text-sm font-medium text-gray-700 mb-1')
-                ui.label(f'Job ID: {self.controller.job_id}').classes('text-sm font-medium text-gray-700 mb-1')
+            # with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
+            #     ui.label(f'Job ID: {ui_controller.job_id}').classes('text-sm font-medium text-gray-700 mb-1')
+            #     ui.label(f'Description: {ui_controller.job_description}').classes('text-sm font-medium text-gray-700 mb-1')
+            #     ui.label(f'Customer: {ui_controller.customer}').classes('text-sm font-medium text-gray-700 mb-1')
+            job_section = JobCardCandidateJobs(ui_controller)
             file_upload_section = FileUploadSection(ui_controller)
             Eval_button = ui.button('Initial evaluate', icon='send') \
                 .classes('mt-4 bg-blue-500 text-white') \

@@ -136,7 +136,7 @@ class CandidateTable:
                 ui.space().classes("ml-auto")
 
                 ui.input(
-                    label="Search candidates",
+                    label="Search",
                     on_change=lambda e: self._update_search(e.value)
                 ).classes(COMMON)
 
@@ -335,7 +335,7 @@ class CandidateTable:
         if self.filter_section_expansion:
             with self.filter_section_expansion:
                 self.filter_section_expansion.clear()
-                ui.label("Filter by Requirements").classes("text-lg font-bold")
+                # ui.label("Filter by Requirements").classes("text-lg font-bold")
                 with ui.row().classes('flex flex-wrap gap-2'):
                     ui.label("Must-have").classes("text-md font-semibold")
                     for req_name in self.musthave_req_names:

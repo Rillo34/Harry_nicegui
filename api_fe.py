@@ -3,7 +3,7 @@ import json
 import requests
 import httpx
 from nicegui import events, ui
-from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse
+from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJob, CandidatesJobResponse
 from pydantic import parse_obj_as
 
 
@@ -26,6 +26,7 @@ class APIController:
             print('Fel vid API-anrop:', e)
             return []
         
+
     async def files_to_backend(self):
         files_uploaded = self.controller.uploaded_job_description or self.controller.uploaded_cvs
 
@@ -65,6 +66,8 @@ class APIController:
                 self.controller.job_id = response_data.job.job_id
                 self.controller.job_description = response_data.job.description
                 self.controller.customer = response_data.job.customer
+                self.controller.job_state = response_data.job.state
+                self.controller.highest_candidate_status = response_data.job.highest_candidate_status
                 self.controller.candidates = response_data.candidates
                 
             except Exception as e:
@@ -133,6 +136,33 @@ class APIController:
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
         
+    async def api_get_candidates_job(self):
+        payload = CandidatesJob(
+            job_id=self.controller.job_id
+        )
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    'http://127.0.0.1:8080/get-candidates-job',
+                    json=payload.dict()
+                )
+
+            if response.status_code == 200:
+                response = CandidatesJobResponse(**response.json())
+
+                # Uppdatera controller med nya data
+                self.controller.candidates = response.candidates
+
+                print("Hämta nya kandidater lyckades")
+                return response
+            else:
+                ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+                return None
+
+        except Exception as e:
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
         
 
 class UploadController:
@@ -145,6 +175,8 @@ class UploadController:
         self.uploaded_cvs = []  # lista av UploadedFile
         self.shortlist_size = 3  # default
         self.candidates = []
+        self.job_state = "Open"
+        self.highest_candidate_status = ""
 
     def add_requirement(self, requirement_object):
         """Lägger till ett nytt krav i listan om det inte redan finns."""
