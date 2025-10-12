@@ -17,10 +17,10 @@ class JobCardCandidateJobs:
             #    ui.label(f'Cand status: {self.controller.highest_candidate_status}').classes('text-sm font-medium text-gray-700 mb-1')
             #    ui.label(f'Description: {self.controller.job_description}').classes('text-sm font-medium text-gray-700 mb-1')
             #    ui.label(f'Customer: {self.controller.customer}').classes('text-sm font-medium text-gray-700 mb-1')
-               ui.label().bind_text_from(self.controller, 'job_id', lambda v: f'ID: {v}').classes('text-sm font-medium text-gray-700 mb-1')
-               ui.label().bind_text_from(self.controller, 'job_state', lambda v: f'State: {v}').classes('text-sm font-medium text-gray-700 mb-1')
-               ui.label().bind_text_from(self.controller, 'highest_candidate_status', lambda v: f'Cand status: {v}').classes('text-sm font-medium text-gray-700 mb-1')
-               ui.label().bind_text_from(self.controller, 'job_description', lambda v: f'Description: {v}').classes('text-sm font-medium text-gray-700 mb-1')
-               ui.label().bind_text_from(self.controller, 'customer', lambda v: f'Customer: {v}').classes('text-sm font-medium text-gray-700 mb-1')
+               ui.label().bind_text_from(self.controller, 'customer', lambda v: f'Customer: {v}').classes('text-sm font-medium text-gray-700')
+               ui.label().bind_text_from(self.controller, 'start_date', lambda v: f'Start: {v}').classes('text-sm font-medium text-gray-700')
+               ui.label().bind_text_from(self.controller, 'job_state', lambda v: f'State: {v}').classes('text-sm font-medium text-gray-700')
+               ui.label().bind_text_from(self.controller, 'highest_candidate_status', lambda v: f'Cand status: {v}').classes('text-sm font-medium text-gray-700')
+               ui.label().bind_text_from(self.controller, 'job_description', lambda v: f'Description: {v}').classes('text-sm font-medium text-gray-700')
 
                 

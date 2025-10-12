@@ -68,6 +68,11 @@ class RequirementSection:
                 #     ui.button(icon='delete', on_click=lambda e, r=req: self.remove_requirement(r.reqname)).props('flat round size=sm color=red').classes('ml-auto')
                 # ui.label(req.reqname).classes('flex-grow ' + ('text-green-700' if req.ismusthave else 'text-gray-600'))
                 with ui.column().classes('w-full border-b p-0'):
+                    ui.label(
+                        req.reqname
+                    ).classes(
+                        'text-sm px-1 ' + ('text-green-700' if req.ismusthave else 'text-gray-600')
+                    )
                     with ui.row().classes('w-full items-center justify-between min-h-[32px]'):
                         # Vänster sida (toggle + label) i en egen row
                         with ui.row().classes('items-center gap-2'):
@@ -89,8 +94,4 @@ class RequirementSection:
                         ).props('flat round size=sm color=red')
 
                     # Rad 2: själva namnet
-                    ui.label(
-                        req.reqname
-                    ).classes(
-                        'text-sm px-1 ' + ('text-green-700' if req.ismusthave else 'text-gray-600')
-                    )
+                    

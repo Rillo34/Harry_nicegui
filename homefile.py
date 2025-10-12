@@ -37,14 +37,19 @@ def jobs_page():
 
 
 @ui.page('/candidatejobs')
-def candidate_jobs_page(job_id: str = None):
+async def candidate_jobs_page(job_id: str = None):
     print("Job ID from query:", job_id)
-    ui.label(f"Job ID: {job_id}")
     drawer = LeftDrawer()
-    # Hela sidan som row
+    if job_id:
+        ui_controller.job_id = job_id
+        await API_client.api_get_candidates_job()
+    ui.label(f"Job ID: {job_id}")
+
+    for key, value in ui_controller.__dict__.items():
+        print(f"{key}: {value}")
+
     with ui.row().classes('w-full h-screen items-start'):
         # Vänster kolumn: filuppladdning + knappar
-        ui_controller.job_id = job_id
         with ui.column().classes('w-96 p-4'):
             # with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
             #     ui.label(f'Job ID: {ui_controller.job_id}').classes('text-sm font-medium text-gray-700 mb-1')
@@ -80,8 +85,11 @@ def candidate_jobs_page(job_id: str = None):
                     )
 
             # Tabellen placeras direkt i kolumnen
-            initial_candidate_data = get_initial_data()
-            candidate_ui_table = CandidateTable(initial_candidate_data)
+            if job_id:
+                candidates_data = ui_controller.candidates
+            else:
+                candidates_data = get_initial_data()
+            candidate_ui_table = CandidateTable(candidates_data)
 
     # Async-funktion för att hämta kandidater
     async def initial_evaluate():
@@ -112,6 +120,11 @@ def candidate_jobs_page(job_id: str = None):
         ui.notify(f"Updated with {len(ui_controller.candidates)} candidates")
     
 
-
+@ui.page('/jobs-automate')
+def jobs_automate_page():
+    drawer = LeftDrawer()
+    job_list = API_client.get_all_jobs()
+    print("joblist: ", job_list)
+    joblist_display = JobList(job_list)
 
 ui.run(port=8005, reload=False)

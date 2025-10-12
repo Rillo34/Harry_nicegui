@@ -28,7 +28,7 @@ class JobList:
 
         # Define preferred column order
         self.preferred_column_order = [
-            'job_id', 'customer', 'title', 'description', 'contact_person', 'start_date', 'duration',
+            'job_id', 'customer', 'shortlist_size', 'title', 'description', 'contact_person', 'start_date', 'duration',
             'due_date', 'days_left', 'candidates', 'highest_candidate_status',
             'assigned_to', 'state', 'musthave', 'desirable', 'actions'
         ]
@@ -63,8 +63,9 @@ class JobList:
         )
 
         # Initialize with no columns hidden (empty selected_columns)
-        self.selected_columns = []  # Columns to hide
-        self.columns = self.all_columns  # Start with all columns in preferred order
+        self.selected_columns = ["shortlist_size"]  # Columns to hide
+        # self.columns = self.all_columns  # Start with all columns in preferred order
+        self.columns = [col for col in self.all_columns if col['name'] not in self.selected_columns]
 
         self._build_ui()
 
@@ -164,12 +165,12 @@ class JobList:
                         <q-menu>
                             <q-list style="min-width: 150px">
                                 <q-item clickable v-close-popup
-                                        @click="console.log('Emitting details for ' + props.row.job_id); $parent.$emit('menu_action', {action: 'details', row_id: props.row.job_id})">
-                                    <q-item-section>View Details</q-item-section>
+                                        @click="console.log('Emitting details for ' + props.row.job_id); $parent.$emit('menu_action', {action: 'candidatejob', row_id: props.row.job_id})">
+                                    <q-item-section>Candidate Job</q-item-section>
                                 </q-item>
                                 <q-item clickable v-close-popup
                                         @click="console.log('Emitting edit for ' + props.row.job_id); $parent.$emit('menu_action', {action: 'edit', row_id: props.row.job_id})">
-                                    <q-item-section>Edit</q-item-section>
+                                    <q-item-section>Edit/Details</q-item-section>
                                 </q-item>
                                 <q-item clickable v-close-popup
                                         @click="console.log('Emitting delete for ' + props.row.job_id); $parent.$emit('menu_action', {action: 'delete', row_id: props.row.job_id})">
@@ -216,9 +217,9 @@ class JobList:
         print ("klick på:", row)
         # print(f"Action: {action} on job: {job_title} (ID: {row_id})")
 
-        if action == 'details':
-            ui.open(f'/candidatejobs?job_id={row.job_id}')
-            ui.notify(f"Showing details for {row.title}", type='info')
+        if action == 'candidatejob':
+            ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')            
+            ui.notify(f"Going to candidatejob {row.title}", type='info')
         elif action == 'edit':
             ui.notify(f"Editing {row.title}", type='warning')
         elif action == 'delete':

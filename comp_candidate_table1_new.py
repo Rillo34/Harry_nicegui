@@ -34,6 +34,8 @@ class CandidateTable:
                 cand_copy['job_availability'] = "N/A"
             self.candidates_list.append(cand_copy)
         
+        self.original_candidates_list = self.candidates_list.copy()
+        
         print(f"Job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
 
         priority_fields = ["candidate_id", "name", "combined_score"]
@@ -97,28 +99,7 @@ class CandidateTable:
         with ui.row().classes('items-center w-full justify-between'):
             # ui.label('Candidate Table').classes('text-1xl font-bold p-4')
             COMMON = "w-64 text-sm [&_.q-field__label]:text-sm [&_.q-field__label]:font-small [&_.q-field__input]:text-sm [&_.q-field__native]:text-sm"
-            # with ui.row().classes('items-center gap-4'):
-                # ui.input(
-                #     label="Search candidates",
-                #     on_change=lambda e: self._update_search(e.value)
-                # ).classes(COMMON)
-
-                # ui.select(
-                #     options=[col["name"] for col in self.columns if col["name"] != "actions"],
-                #     label="Hide/select Columns",
-                #     multiple=True,
-                #     on_change=lambda e: self._update_columns(e.value)
-                # ).classes(COMMON)
-
-                #     shortlist_size = ui.select(
-                #     options=[1, 3, 5, 10, 20],
-                #     value=3,
-                #     label='Shortlist size',
-                #     on_change=lambda e: resize(e.value)
-                # ).classes(COMMON)
-                # Reeval_button = ui.button('Re-evaluate', icon='send').classes('mt-4 bg-blue-500 text-white') \
-                #     .on('click', lambda e: re_evaluate()) \
-                #     .props('enabled')
+           
 
         self.filter_section_expansion = ui.expansion('REQUIREMENTS FILTER', icon='extension').classes('w-full font-bold')
         with self.filter_section_expansion:
@@ -134,6 +115,14 @@ class CandidateTable:
 
                 # Gör en "spacer" som trycker resten åt höger
                 ui.space().classes("ml-auto")
+                
+                ui.select(
+                    options=["Before", "Any"],
+                    label="Availability for assignment",
+                    value = "Any",
+                    multiple=False,
+                    on_change=lambda e: self._filter_by_availability(e.value)
+                ).classes(COMMON)
 
                 ui.input(
                     label="Search",
@@ -238,6 +227,23 @@ class CandidateTable:
                 '''
             )
             self.table.add_slot(
+                "body-cell-status",
+                r'''
+                <q-td :props="props">
+                    <q-select
+                        dense
+                        outlined
+                        emit-value
+                        map-options
+                        :options="['Applied', 'Screened', 'Interviewed', 'Offered', 'Hired']"
+                        v-model="props.row.status"
+                        @update:model-value="$parent.$emit('status_change', {candidate_id: props.row.candidate_id, new_status: props.row.status})"
+                        style="min-width: 130px"
+                    />
+                </q-td>
+                '''
+            )
+            self.table.add_slot(
                 "header-cell-job_availability",
                 r'''
                 <q-th :props="props">
@@ -250,6 +256,7 @@ class CandidateTable:
                 '''
             )
             self.table.on('menu_action', self._on_action)
+            self.table.on('status_change', self._on_status_change)
             self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))
             ui.add_head_html('''
                 <script>
@@ -267,6 +274,41 @@ class CandidateTable:
                 }
                 </script>
             ''')
+
+    def _filter_by_availability(self, event):
+        value = getattr(event, "value", event)
+        print("Val:", value)
+
+        if value == "Before":
+            print("Ska filtrera på '-'")
+            new_rows = [
+                c.copy()
+                for c in self.original_candidates_list
+                if isinstance(c.get("available_in", ""), str) and "-" in c["available_in"]
+            ]
+            print(f"Antal filtrerade kandidater: {len(new_rows)}")
+        else:
+            print("Visar alla kandidater")
+            new_rows = [c.copy() for c in self.original_candidates_list]
+
+        self.table.rows = new_rows
+
+        if hasattr(self.table, "refresh"):
+            print("Använder refresh()")
+            self.table.refresh()
+        else:
+            print("Använder update()")
+            self.table.update()
+
+
+
+    def _on_status_change(self, event):
+        candidate_id = event.args['candidate_id']
+        new_status = event.args['new_status']
+        print(f"Kandidat {candidate_id} uppdaterad till ny status: {new_status}")
+        # Här kan du lägga till API-anrop eller uppdatera datamodellen
+        ui.notify(f"Status uppdaterad till {new_status}", type='info')
+
 
     def _on_action(self, event):
         """Handle events from the action menu."""

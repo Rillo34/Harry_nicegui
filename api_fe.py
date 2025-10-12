@@ -3,7 +3,7 @@ import json
 import requests
 import httpx
 from nicegui import events, ui
-from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJob, CandidatesJobResponse
+from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
 from pydantic import parse_obj_as
 
 
@@ -137,15 +137,11 @@ class APIController:
             return None
         
     async def api_get_candidates_job(self):
-        payload = CandidatesJob(
-            job_id=self.controller.job_id
-        )
-
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(
+                response = await client.get(
                     'http://127.0.0.1:8080/get-candidates-job',
-                    json=payload.dict()
+                    params={"job_id": self.controller.job_id}
                 )
 
             if response.status_code == 200:
@@ -153,8 +149,13 @@ class APIController:
 
                 # Uppdatera controller med nya data
                 self.controller.candidates = response.candidates
-
-                print("Hämta nya kandidater lyckades")
+                self.controller.job_description = response.job.description
+                self.controller.customer = response.job.customer
+                self.controller.job_state = response.job.state
+                self.controller.start_date = response.job.start_date
+                self.controller.shortlist_size = response.job.shortlist_size
+                self.controller.highest_candidate_status = response.job.highest_candidate_status 
+                self.controller.requirements = response.job.requirements
                 return response
             else:
                 ui.notify(f'Fel från backend: {response.status_code}', type='warning')
@@ -169,6 +170,7 @@ class UploadController:
     def __init__(self):
         self.job_id = ""
         self.job_description = ""
+        self.start_date = ""
         self.customer = ""
         self.requirements = []
         self.uploaded_job_description = None  # ska vara NiceGUI UploadedFile
