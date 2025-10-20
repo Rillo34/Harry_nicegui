@@ -149,7 +149,7 @@ class CandidateTable:
             rows=self.candidates_list,
             row_key="candidate_id",
             pagination={'sortBy': 'combined_score', 'descending': True}
-        ).classes("w-full") #classes("w-full max-w-[1800px]")
+        ).classes("table-fixed w-full max-w-full") #classes("w-full max-w-[1800px]")
 
         with self.table:
             self.table.add_slot(
@@ -563,4 +563,4 @@ def main_page():
     # new_candidates =get_new_dummy_data()
     # table.update(new_candidates)
 
-ui.run(port=8004, reload=True)
+#ui.run(port=8004, reload=True)

@@ -48,9 +48,9 @@ async def candidate_jobs_page(job_id: str = None):
     for key, value in ui_controller.__dict__.items():
         print(f"{key}: {value}")
 
-    with ui.row().classes('w-full h-screen items-start'):
+    with ui.row().classes('w-full h-screen items-start overflow-hidden'):
         # Vänster kolumn: filuppladdning + knappar
-        with ui.column().classes('w-96 p-4'):
+        with ui.column().classes('w-96 p-4 h-full overflow-auto'):
             # with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
             #     ui.label(f'Job ID: {ui_controller.job_id}').classes('text-sm font-medium text-gray-700 mb-1')
             #     ui.label(f'Description: {ui_controller.job_description}').classes('text-sm font-medium text-gray-700 mb-1')
@@ -63,7 +63,7 @@ async def candidate_jobs_page(job_id: str = None):
             requirements_section = RequirementSection(ui_controller)
 
         # Höger kolumn: kandidater
-        with ui.column().classes('flex-1 p-4'):
+        with ui.column().classes('flex-1 p-4 h-full overflow-auto'):
             with ui.row().classes("w-full justify-between gap-2"):
                 ui.label('Candidates').classes('text-lg font-bold mb-2')
                 # with ui.card().classes('shadow-md p-4 w-1/4 mt-4') as job_card:
@@ -89,7 +89,8 @@ async def candidate_jobs_page(job_id: str = None):
                 candidates_data = ui_controller.candidates
             else:
                 candidates_data = get_initial_data()
-            candidate_ui_table = CandidateTable(candidates_data)
+            with ui.element().classes("w-full overflow-auto"):
+                candidate_ui_table = CandidateTable(candidates_data)
 
     # Async-funktion för att hämta kandidater
     async def initial_evaluate():

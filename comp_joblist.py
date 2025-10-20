@@ -35,8 +35,7 @@ class JobList:
 
         # Define all possible columns
         excluded_fields = ["requirements", "created_at"]
-        ordered_fields = [f for f in JobRequest.__fields__ if f not in excluded_fields]
-        ordered_fields.append("days_left")
+        ordered_fields = [f for f in JobRequest.__fields__ if f not in excluded_fields] + ["musthave", "desirable", "days_left"]
         self.all_columns = [
             {
                 "name": field,
