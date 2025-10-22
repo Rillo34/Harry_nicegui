@@ -11,10 +11,25 @@ class APIController:
     def __init__(self, controller):
         self.controller = controller
 
-    def get_all_jobs(self):
+    async def get_all_jobs(self):
         try:
             response = requests.get(
                 'http://127.0.0.1:8080/get-jobs'
+            )
+            if response.status_code == 200:
+                print(response)
+                return response.json()
+            else:
+                print('Fel vid hämtning av jobb', response.status_code)
+                return []  # returnera tom lista istället för False
+        except Exception as e:
+            print('Fel vid API-anrop:', e)
+            return []
+    
+    async def get_all_mails(self):
+        try:
+            response = requests.get(
+                'http://127.0.0.1:8080/get-mails'
             )
             if response.status_code == 200:
                 print(response)
@@ -127,6 +142,7 @@ class APIController:
                 self.controller.candidates = reeval_response.candidates
 
                 print("Reeval lyckades")
+                print(self.controller.candidates)
                 return reeval_response
             else:
                 ui.notify(f'Fel från backend: {response.status_code}', type='warning')

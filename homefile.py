@@ -28,13 +28,6 @@ def home_page():
         ui.label("Welcome!").classes("text-xl")
         ui.label("Swipe from the left or use the menu button to open the drawer.")
 
-@ui.page('/jobs')
-def jobs_page():
-    drawer = LeftDrawer()
-    job_list = API_client.get_all_jobs()
-    print("joblist: ", job_list)
-    joblist_display = JobList(job_list)
-
 
 @ui.page('/candidatejobs')
 async def candidate_jobs_page(job_id: str = None):
@@ -122,9 +115,18 @@ async def candidate_jobs_page(job_id: str = None):
     
 
 @ui.page('/jobs-automate')
-def jobs_automate_page():
+async def jobs_automate_page():
     drawer = LeftDrawer()
-    job_list = API_client.get_all_jobs()
+    job_list = await API_client.get_all_mails()
+
+    print("joblist: ", job_list)
+    joblist_display = JobList(job_list)
+
+@ui.page('/jobs')
+async def jobs_page():
+    drawer = LeftDrawer()
+    
+    job_list = await API_client.get_all_jobs()
     print("joblist: ", job_list)
     joblist_display = JobList(job_list)
 
