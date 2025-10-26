@@ -14,6 +14,7 @@ class LeftDrawer:
             ui.button('Jobs', icon='work', on_click=lambda: ui.navigate.to('/jobs')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Job automate', icon='work', on_click=lambda: ui.navigate.to('/jobs-automate')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Pipeline', icon='schema', on_click=lambda: ui.notify('Pipeline')).classes('w-full justify-start mb-2 text-lg')
+            ui.button('Candidate Availability', icon='calendar_today', on_click=lambda: ui.notify('Candidate availability')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Data Model', icon='account_tree', on_click=lambda: ui.notify('Data Model')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Dashboard', icon='dashboard', on_click=lambda: ui.notify('Dashboard')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Test Data', icon='manage', on_click=lambda: ui.notify('Test data')).classes('w-full justify-start mb-2 text-lg')
