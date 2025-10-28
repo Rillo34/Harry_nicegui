@@ -130,4 +130,12 @@ async def jobs_page():
     print("joblist: ", job_list)
     joblist_display = JobList(job_list)
 
+@ui.page('/jobs')
+async def jobs_page():
+    drawer = LeftDrawer()
+    
+    job_list = await API_client.get_all_jobs()
+    print("joblist: ", job_list)
+    joblist_display = JobList(job_list)
+
 ui.run(port=8005, reload=False)
