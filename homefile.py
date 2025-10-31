@@ -63,6 +63,7 @@ async def candidate_jobs_page(job_id: str = None):
                 ui.space().classes("ml-auto")
 
                 with ui.row().classes("items-center gap-2"):
+                    checkbox_1 = ui.checkbox(text="Include internal candidates", on_change=lambda e: get_internal_candidates())
                     shortlist_size = ui.select(
                         options=[1, 3, 5, 10, 20],
                         value=ui_controller.shortlist_size,
@@ -104,11 +105,17 @@ async def candidate_jobs_page(job_id: str = None):
         candidate_ui_table.update(ui_controller.candidates)
         ui.notify(f"Updated with {len(ui_controller.candidates)} candidates")
 
-
     async def re_evaluate():
         print("in re_evaluate")
         ui_controller.shortlist_size = shortlist_size
         await API_client.api_reevaluate()
+        print("nr of candidates: ", len(ui_controller.candidates))
+        candidate_ui_table.update(ui_controller.candidates)
+        ui.notify(f"Updated with {len(ui_controller.candidates)} candidates")
+    
+    async def get_internal_candidates():
+        print("in get_internal_candidates")
+        await API_client.api_get_internal_candidates()
         print("nr of candidates: ", len(ui_controller.candidates))
         candidate_ui_table.update(ui_controller.candidates)
         ui.notify(f"Updated with {len(ui_controller.candidates)} candidates")
@@ -125,7 +132,6 @@ async def jobs_automate_page():
 @ui.page('/jobs')
 async def jobs_page():
     drawer = LeftDrawer()
-    
     job_list = await API_client.get_all_jobs()
     print("joblist: ", job_list)
     joblist_display = JobList(job_list)

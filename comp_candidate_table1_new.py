@@ -148,7 +148,7 @@ class CandidateTable:
             columns=[col for col in self.columns if col["name"] in self.visible_columns + ["actions"]],
             rows=self.candidates_list,
             row_key="candidate_id",
-            pagination={'sortBy': 'combined_score', 'descending': True}
+            pagination={'sortBy': 'combined_score', 'descending': True, 'rowsPerPage': 15}
         ).classes("table-fixed w-full max-w-full") #classes("w-full max-w-[1800px]")
 
         with self.table:

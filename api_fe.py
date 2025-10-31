@@ -180,7 +180,37 @@ class APIController:
         except Exception as e:
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
+
+    async def api_get_internal_candidates(self):
+        print("in api_get_internal_candidates, controllerns job id: ", self.controller.job_id)
+        print("---controllern 1 --")
+        for attr, value in vars(self.controller).items():
+            print(f"{attr}: {value}")        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    'http://127.0.0.1:8080/evaluate-internal-candidates',
+                    json={"job_id": self.controller.job_id}
+                )
+            if response.status_code == 200:
+                response = ReEvaluateResponse(**response.json())
+
+                # Uppdatera controller med nya data
+                self.controller.candidates = response.candidates
+                print("---controllern 2 --")
+                for attr, value in vars(self.controller).items():
+                    print(f"{attr}: {value}")
+                return response
+            else:
+                ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+                return None
+
+        except Exception as e:
         
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            print ("exception i api_get_internal_candidates: ", e)
+            return None
+
 
 class UploadController:
     def __init__(self):
