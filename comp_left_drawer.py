@@ -7,7 +7,7 @@ class LeftDrawer:
         drawer.props('swipe-open')  # enable swipe gesture
         with drawer:
             # ui.label('Navigation').classes('text-xl font-bold mb-4')
-            ui.button('HOME', icon='home', on_click=lambda: ui.notify('CandidateJob')).classes('w-full justify-start mb-2 text-lg bg-orange text-black')
+            ui.button('HOME', icon='home', on_click=lambda: ui.notify('HOME')).classes('w-full justify-start mb-2 text-lg bg-orange text-black')
             ui.button('CandidateJob', icon='upload', on_click=lambda: ui.navigate.to('/candidatejobs')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Candidates', icon='people', on_click=lambda: ui.notify('Candidates')).classes('w-full justify-start mb-2 text-lg')
             # ui.button('Jobs', icon='work', on_click=lambda: ui.notify('Jobs')).classes('w-full justify-start mb-2 text-lg')
@@ -15,7 +15,7 @@ class LeftDrawer:
             ui.button('Job automate', icon='work', on_click=lambda: ui.navigate.to('/jobs-automate')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Pipeline', icon='schema', on_click=lambda: ui.notify('Pipeline')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Candidate Availability', icon='calendar_today', on_click=lambda: ui.notify('Candidate availability')).classes('w-full justify-start mb-2 text-lg')
-            ui.button('Data Model', icon='account_tree', on_click=lambda: ui.notify('Data Model')).classes('w-full justify-start mb-2 text-lg')
+            ui.button('Data Model', icon='account_tree', on_click=lambda: ui.navigate.to('/datamodel')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Dashboard', icon='dashboard', on_click=lambda: ui.notify('Dashboard')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Test Data', icon='manage', on_click=lambda: ui.notify('Test data')).classes('w-full justify-start mb-2 text-lg')
 

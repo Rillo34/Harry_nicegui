@@ -4,6 +4,7 @@ import requests
 import httpx
 from nicegui import events, ui
 from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
+# from models import J
 from pydantic import parse_obj_as
 
 
@@ -18,6 +19,21 @@ class APIController:
             )
             if response.status_code == 200:
                 print(response)
+                return response.json()
+            else:
+                print('Fel vid hämtning av jobb', response.status_code)
+                return []  # returnera tom lista istället för False
+        except Exception as e:
+            print('Fel vid API-anrop:', e)
+            return []
+    
+    async def get_datamodel_jobs(self):
+        try:
+            response = requests.get(
+                'http://127.0.0.1:8080/get-job-states'
+            )
+            if response.status_code == 200:
+                print("RESPONSE: ", response)
                 return response.json()
             else:
                 print('Fel vid hämtning av jobb', response.status_code)

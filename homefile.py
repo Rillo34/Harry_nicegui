@@ -4,8 +4,10 @@ from comp_joblist import JobList
 from comp_requirements import RequirementSection
 from comp_file_upload import FileUploadSection
 # from comp_candidate_table1 import CandidateTable, get_initial_data
-from comp_candidate_table1_new import CandidateTable, get_initial_data
+from comp_candidatejobs_table import CandidateJobsTable, get_initial_data
 from comp_jobcard_cand_jobs import JobCardCandidateJobs
+from comp_cons_datamodel import DataModelTable
+import pandas as pd
 
 from api_fe import APIController, UploadController
 from models import JobRequest
@@ -84,7 +86,7 @@ async def candidate_jobs_page(job_id: str = None):
             else:
                 candidates_data = get_initial_data()
             with ui.element().classes("w-full overflow-auto"):
-                candidate_ui_table = CandidateTable(candidates_data)
+                candidate_ui_table = CandidateJobsTable(candidates_data)
 
     # Async-funktion för att hämta kandidater
     async def initial_evaluate():
@@ -143,5 +145,13 @@ async def jobs_page():
     job_list = await API_client.get_all_jobs()
     print("joblist: ", job_list)
     joblist_display = JobList(job_list)
+
+@ui.page('/datamodel')
+async def datamodel_page():
+    drawer = LeftDrawer()
+    data_model_response = await API_client.get_datamodel_jobs()
+    print("data_model_response: ", data_model_response)
+    df = pd.DataFrame(data_model_response)
+    data_model_display = DataModelTable(df)
 
 ui.run(port=8005, reload=False)

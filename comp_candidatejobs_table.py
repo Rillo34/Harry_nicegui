@@ -17,7 +17,7 @@ from models import CandidateResultLong, RequirementResult
 
 
 
-class CandidateTable:
+class CandidateJobsTable:
     def __init__(self, candidates: List[CandidateResultLong], fictive_start_date: date = date(2025, 10, 1)):
         self.fictive_start_date = fictive_start_date
         self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in candidates}
