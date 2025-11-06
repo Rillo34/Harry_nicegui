@@ -6,6 +6,7 @@ from nicegui import events, ui
 from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
 # from models import J
 from pydantic import parse_obj_as
+import inspect
 
 
 class APIController:
@@ -28,6 +29,7 @@ class APIController:
             return []
     
     async def get_datamodel_jobs(self):
+        print("get_datamodel_jobs called from:", inspect.stack()[1].function)
         try:
             response = requests.get(
                 'http://127.0.0.1:8080/get-job-states'
@@ -56,7 +58,7 @@ class APIController:
         except Exception as e:
             print('Fel vid API-anrop:', e)
             return []
-        
+    
 
     async def files_to_backend(self):
         files_uploaded = self.controller.uploaded_job_description or self.controller.uploaded_cvs
@@ -228,6 +230,50 @@ class APIController:
             return None
 
 
+    async def api_put_new_datamodel(self):
+        print("in api_put new datamodel")
+        payload = {
+            "updated_statuses": self.controller.job_states_list,
+            "name_mapping": self.controller.job_states_mapping_dict
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    'http://127.0.0.1:8080/update-job-statuses',
+                    json=payload
+                )
+            if response.status_code == 200:
+                print("---ALL Good --")
+            else:
+                ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+                return None
+        except Exception as e:
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+    async def api_post_job_status_update(self):
+        print("in api_put new job status")
+        payload = {
+            "job_id": self.controller.job_id,
+            "status": self.controller.job_state
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    'http://127.0.0.1:8080/update-job-status',
+                    json=payload
+                )
+            if response.status_code == 200:
+                print("---ALL Good updating job--")
+            else:
+                ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+                return None
+        except Exception as e:
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+
+
 class UploadController:
     def __init__(self):
         self.job_id = ""
@@ -239,7 +285,11 @@ class UploadController:
         self.uploaded_cvs = []  # lista av UploadedFile
         self.shortlist_size = 3  # default
         self.candidates = []
-        self.job_state = "Open"
+        self.job_state = "NEW"
+        self.job_states_list = []           # full dict of job states
+        self.job_states_name_list = []      # list of job state names, to be used in other sections
+        self.job_states_mapping_dict = {}  # mapping old states to new states
+        self.candidate_states_list = []
         self.highest_candidate_status = ""
 
     def add_requirement(self, requirement_object):
@@ -334,3 +384,5 @@ class UploadController:
 
         except Exception as e:
             return False, f'Ett fel uppstod: {e}'        
+
+

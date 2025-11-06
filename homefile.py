@@ -1,5 +1,6 @@
 from nicegui import ui
 from comp_left_drawer import LeftDrawer
+# from comp_joblist import JobList
 from comp_joblist import JobList
 from comp_requirements import RequirementSection
 from comp_file_upload import FileUploadSection
@@ -131,20 +132,20 @@ async def jobs_automate_page():
     print("joblist: ", job_list)
     joblist_display = JobList(job_list)
 
-@ui.page('/jobs')
-async def jobs_page():
-    drawer = LeftDrawer()
-    job_list = await API_client.get_all_jobs()
-    print("joblist: ", job_list)
-    joblist_display = JobList(job_list)
+
 
 @ui.page('/jobs')
 async def jobs_page():
     drawer = LeftDrawer()
-    
+    data_model_response = await API_client.get_datamodel_jobs()
+    print("data_model_response: ", data_model_response)
+    df = pd.DataFrame(data_model_response)
+    ui_controller.job_states_name_list = df['name'].tolist()
     job_list = await API_client.get_all_jobs()
     print("joblist: ", job_list)
-    joblist_display = JobList(job_list)
+    joblist_display = JobList(job_list, API_client)
+
+
 
 @ui.page('/datamodel')
 async def datamodel_page():
@@ -152,6 +153,14 @@ async def datamodel_page():
     data_model_response = await API_client.get_datamodel_jobs()
     print("data_model_response: ", data_model_response)
     df = pd.DataFrame(data_model_response)
-    data_model_display = DataModelTable(df)
+    data_model_display = DataModelTable(df, API_client)
+    
+
+@ui.page('/datavalidation')
+async def datavalidation_page():
+    drawer = LeftDrawer()
+    ui.label('Printing variables in ui_controller:')
+    for key, value in ui_controller.__dict__.items():
+        ui.label(f"{key}: {value}")
 
 ui.run(port=8005, reload=False)

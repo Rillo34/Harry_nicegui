@@ -18,6 +18,8 @@ class LeftDrawer:
             ui.button('Data Model', icon='account_tree', on_click=lambda: ui.navigate.to('/datamodel')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Dashboard', icon='dashboard', on_click=lambda: ui.notify('Dashboard')).classes('w-full justify-start mb-2 text-lg')
             ui.button('Test Data', icon='manage', on_click=lambda: ui.notify('Test data')).classes('w-full justify-start mb-2 text-lg')
+            ui.button('Data validate', icon='data', on_click=lambda: ui.navigate.to('/datavalidation')).classes('w-full justify-start mb-2 text-lg')
+            
 
         # Top header with toggle button
         with ui.header().classes('bg-blue-600 text-white py-2 w-700'):

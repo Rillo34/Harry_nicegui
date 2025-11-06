@@ -17,7 +17,6 @@ class JobList:
         job_objects = [JobRequest(**j) for j in jobs]
         self.jobs_map = {j.job_id: j for j in job_objects}
         self.jobs_list = []
-        self.api_client = api_client
         self.controller = api_client.controller
 
 
@@ -31,15 +30,15 @@ class JobList:
             else:
                 job_dict['days_left'] = "N/A"
             job_dict['expanded'] = False
-            # job_dict['status'] = job_dict.get('status', job_dict.get('state', '1-Open')) if job_dict.get('status', job_dict.get('state', '1-Open')) in ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"] else "1-Open"
+            job_dict['status'] = job_dict.get('status', job_dict.get('state', '1-Open')) if job_dict.get('status', job_dict.get('state', '1-Open')) in ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"] else "1-Open"
             self.jobs_list.append(job_dict)
-        # print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
+        print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
 
         self.valid_states = ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"]
 
         self.preferred_column_order = [
             'job_id', 'customer', 'title', 'contact_person', 'start_date', 'duration', 'due_date',
-            'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
+            'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'status', 'details', 'actions'
         ]
 
         self.all_columns = [
@@ -54,7 +53,7 @@ class JobList:
             {"name": "candidates", "label": "Candidates", "field": "candidates", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
             {"name": "highest_candidate_status", "label": "Top Candidate Status", "field": "highest_candidate_status", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
             {"name": "assigned_to", "label": "Assigned To", "field": "assigned_to", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-            {"name": "state", "label": "State", "field": "state", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
+            {"name": "status", "label": "Status", "field": "status", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
             {"name": "details", "label": "Details", "field": "details", "sortable": False, "style": "max-width: 100px;", "align": "center"},
             {"name": "actions", "label": "", "field": "actions", "sortable": False, "style": "width: 50px;", "align": "center"}
         ]
@@ -84,6 +83,8 @@ class JobList:
         ).classes("table-fixed w-full max-w-full")
 
         self.table.bind_filter_from(search_input, 'value')
+        # status_options = ['1-Open', '2-In Progress', '3-Offered', '4-Contracted']
+        # status_options_js = json.dumps(status_options)  # → '["1-Open", "2-In Progress", ...]'
         status_options = self.controller.job_states_name_list
 
         with self.table:
@@ -124,16 +125,29 @@ class JobList:
                                 </q-menu>
                             </q-btn>
                         </template>
-                        <template v-else-if="col.name === 'days_left'">
-                            <span :style="props.row.days_left === 'N/A' ? '' : (parseInt(props.row.days_left) < 0 ? 'color: red; font-weight: bold;' : parseInt(props.row.days_left) < 7 ? 'color: orange; font-weight: bold;' : 'color: green; font-weight: bold;')">
-                                {{ props.row.days_left || 'N/A' }}
-                            </span>
-                        </template>
-                        <template v-else-if="col.name === 'state'">
+                        # <template v-else-if="col.name === 'days_left'">
+                        #     <span
+                        #         :style="props.row.days_left === 'N/A'
+                        #             ? ''
+                        #             : parseInt(props.row.days_left) < 0
+                        #                 ? 'background-color: #ffebee; color: red; font-weight: bold; padding: 4px; border-radius: 4px;'
+                        #                 : parseInt(props.row.days_left) < 7
+                        #                     ? 'background-color: #fff3e0; color: orange; font-weight: bold; padding: 4px; border-radius: 4px;'
+                        #                     : 'background-color: #e8f5e9; color: green; font-weight: bold; padding: 4px; border-radius: 4px;'"
+                        #     >
+                        #         {{ props.row.days_left || 'N/A' }}
+                        #     </span>
+                        # </template>
+                        # <template v-else-if="col.name === 'days_left'">
+                        #     <span :style="props.row.days_left === 'N/A' ? '' : (parseInt(props.row.days_left) < 0 ? 'color: red; font-weight: bold;' : parseInt(props.row.days_left) < 7 ? 'color: orange; font-weight: bold;' : 'color: green; font-weight: bold;')">
+                        #         {{ props.row.days_left || 'N/A' }}
+                        #     </span>
+                        # </template>
+                        <template v-else-if="col.name === 'status'">
                             <q-select dense outlined
-                                v-model="props.row.state"
+                                v-model="props.row.status"
                                 :options="''' + str(status_options) + r'''"                  
-                                @update:model-value="$parent.$emit('status_change', {job_id: props.row.job_id, new_status: props.row.state})"
+                                @update:model-value="$parent.$emit('status_change', {job_id: props.row.job_id, new_status: props.row.status})"
                                 style="min-width: 150px"
                             />
                         </template>                        
@@ -193,13 +207,24 @@ class JobList:
         print(f"Jobs list after toggle: {self.jobs_list}")
         self.table.update()
 
-    async def _on_status_change(self, event):
+    def _on_status_change(self, event):
         payload = event.args 
         print(payload)
-        self.controller.job_id = payload.get('job_id')
-        self.controller.job_state = payload.get('new_status')
-        await self.api_client.api_post_job_status_update()
-        print(f"Status updated for job_id: {self.controller.job_id} to {self.controller.job_state}")
+        # payload = event.args if isinstance(event, dict) else event
+        # job_id = payload.get('job_id')
+        # new_status = payload.get('new_status')
+        # print(f"Status change for job_id: {job_id}, new_status: {new_status}")
+        # if new_status not in self.valid_states:
+        #     ui.notify(f"Invalid status: {new_status}", type='negative')
+        #     return
+        # for job in self.jobs_list:
+        #     if job['job_id'] == job_id:
+        #         job['status'] = new_status
+        #         break
+        # self.jobs_map[job_id].status = new_status
+        # ui.notify(f"Status updated to {new_status} for job {job_id}", type='positive')
+        print(f"Jobs list after status update: ")
+        # self.table.update()
 
     def _on_action(self, event):
         print("--- _on_action triggered ---")

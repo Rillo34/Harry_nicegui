@@ -1,18 +1,10 @@
 import pandas as pd
 import random
 from nicegui import ui, events
+from datetime import datetime, timedelta
+from TEST_file import populate_dummy_contracts_df
 
-def add_row() -> None:
-    if not table.rows:
-        ui.notify("Ingen rad att duplicera")
-        return
-    last_row = table.rows[-1].copy()
-    new_id = max(row['row_id'] for row in table.rows) + 1
-    last_row['row_id'] = new_id
-    # Lägg till i tabellen
-    table.rows.append(last_row)
-    table.update()
-    ui.notify(f"Duplicerade sista raden som ID {new_id}")
+
 
 def get_df():   
     namn = [f'Namn_{i}' for i in range(1, 11)]
@@ -30,69 +22,216 @@ def get_df():
     return df
 
 
-df = get_df()
-columns = [{'name': col, 'label': col, 'field': col, 'sortable': True} for col in df.columns]
+class AllocationTable:
+    def __init__(self, df_assignments: pd.DataFrame):
+        self.original_df = df_assignments.copy()
+        self.df_assignments = df_assignments.copy()
+        df_pivot = df_assignments.pivot_table(
+            index=["candidate_id", "contract_id"],
+            columns="month",
+            values="allocation_percent",
+            fill_value=0
+        ).reset_index()
+        print("df_pivot", df_pivot.head(5))
+        self.df = df_pivot.copy()
+        self.df["row_id"] = range(len(self.df))
+        self.columns = [{'name': col, 'label': col, 'field': col, 'sortable': True} for col in self.df.columns]
+        self.create_table()
+        self.create_filter()
+        
 
-def rename(e: events.GenericEventArguments) -> None:
-    print(e.args)
-    for row in table.rows:
-        if row['row_id'] == e.args['row_id']:
-            row.update(e.args)
-    ui.notify(f'Updated row {e.args["row_id"]}')
-    table.update()
+    def create_filter(self):
+        with ui.row().classes('items-center gap-2'):
+            ui.label('Filter på projekt/kandidat: ')
+            
+            ui.input(placeholder='Skriv namn...', on_change=self.apply_filter).classes('w-64')
+            # ui.input(
+            #         label="Search",
+            #         on_change=lambda e: self._update_search(e.value)
+            #     ).classes('w-64')
 
-def delete(e: events.GenericEventArguments) -> None:
-    table.rows[:] = [row for row in table.rows if row['row_id'] != e.args['row_id']]
-    ui.notify(f'Deleted row {e.args["row_id"]}')
-    table.update()
+    def apply_filter(self, e):
+        search_term = e.value.lower()
+        # filtrera baserat på candidate_id
+        # filtered_df = self.original_df[self.original_df['candidate_id'].str.lower().str.contains(search_term)]
+        for row in self.table:
+            for field in ['candidate_id', 'project']:
+                print(f"Filtering on field: {field}, searccing for: {search_term} on row: {row}")
+                if search_term in str(field).lower():
+                    search_match = True
+                    print("we have a match")
+                else:
+                    search_match = False
+        # self.df["row_id"] = range(len(self.df))
+        # self.table.rows = self.df.to_dict('records')
+        # self.table.update()
+        
+    def rename(self, e: events.GenericEventArguments) -> None:
+        print(e.args)
+        for row in self.table.rows:
+            if row['row_id'] == e.args['row_id']:
+                row.update(e.args)
+        ui.notify(f'Updated row {e.args["row_id"]}')
+        self.table.update()
 
-table = ui.table(
-    columns=[{'name': 'delete', 'label': '', 'field': 'delete'}] + columns,
-    rows=df.to_dict('records'),
-    row_key='id'
-).classes('w-full')
+    def delete(self, e: events.GenericEventArguments) -> None:
+        self.table.rows[:] = [row for row in self.table.rows if row['row_id'] != e.args['row_id']]
+        ui.notify(f'Deleted row {e.args["row_id"]}')
+        self.table.update()
 
-# Header slot
-table.add_slot('header', r'''
-<q-tr :props="props">
-    <q-th auto-width />
-    <q-th v-for="col in props.cols" :key="col.name" :props="props">
-        {{ col.label }}
-    </q-th>
-</q-tr>
-''')
+   
 
-# Body slot: dynamiskt generera popup-edit för varje kolumn
-table.add_slot('body', r'''
-<q-tr :props="props">
-    <q-td auto-width>
-        <q-btn size="sm" color="warning" round dense icon="delete"
-            @click="() => $parent.$emit('delete', props.row)" />
-    </q-td>
-    <q-td v-for="col in props.cols" :key="col.name" :props="props">
-        <template v-if="col.name !== 'delete'">
-            {{ props.row[col.field] }}
-            <q-popup-edit v-model="props.row[col.field]" v-slot="scope"
-                @update:model-value="() => $parent.$emit('rename', props.row)">
-                <q-input
-                    :type="typeof props.row[col.field] === 'number' ? 'number' : 'text'"
-                    v-model="scope.value"
-                    dense autofocus counter
-                    :step="typeof props.row[col.field] === 'number' ? 10 : undefined"
-                    @keyup.enter="scope.set"
-                />
-            </q-popup-edit>
-        </template>
-    </q-td>
-</q-tr>
-''')
+    def menu_action(e):
+        # e innehåller x, y, target osv.
+        print(f"Mouse clicked at x={e.args['x']}, y={e.args['y']}")
+        print(f"Row data if available: {e.args.get('row')}")
 
-# Bottom row
-with table.add_slot('bottom-row'):
-    with table.cell().props(f'colspan={len(columns)+1}'):
-        ui.button('Add row', icon='add', color='accent', on_click=add_row).classes('w-60')
 
-table.on('rename', rename)
-table.on('delete', delete)
+    def create_table(self):
+        with ui.tabs() as tabs:
+            ui.tab('alloc', label='Allocate', icon='grid_4x4')
+            ui.tab('project', label='Project', icon='functions')
+            ui.tab('candidate', label='Candidate', icon='functions')
+            ui.tab('avail', label='Input', icon='person_search')
+        with ui.tab_panels(tabs, value='h').classes('w-full'):
+            with ui.tab_panel('project'):
+                ui.label('Summary per project/month')
+                df_project_month = self.df_assignments.pivot_table(
+                    index='contract_id',
+                    columns='month',
+                    values='allocation_percent',
+                    aggfunc='sum',
+                    fill_value=0
+                ).reset_index()                
+                rows = df_project_month.to_dict(orient='records')
+                # Skapa kolumner
+                columns = [{'name': col, 'label': col, 'field': col} for col in df_project_month.columns]
+                projtable = ui.table(columns=columns, rows=rows).classes('dense w-full')
+            with ui.tab_panel('candidate'):
+                def get_columns(df):
+                    return [
+                        {
+                            'name': col,
+                            'label': col,
+                            'field': col,
+                            'sortable': True,
+                        }
+                        for col in df.columns
+                    ]
+                ui.label('Summary per candidate/month')
+                df_candidate_month = self.df_assignments.pivot_table(
+                    index='candidate_id',
+                    columns='month',
+                    values='allocation_percent',
+                    aggfunc='sum',
+                    fill_value=0
+                ).reset_index()
+                # rows = df_candidate_month.to_dict(orient='records')
+                columns = [{'name': col, 'label': col, 'field': col} for col in df_candidate_month.columns]
+                columns = get_columns(df_candidate_month)
+                candtable = ui.table(columns=columns, rows=rows).classes('dense w-full')
+                
+                print (df_candidate_month.head(5))
+            with ui.tab_panel('a'):
+                ui.label('Infos')
 
+        # totals=[]
+        self.table = ui.table(
+        columns=[{'name': 'delete', 'label': '', 'field': 'delete'}] + self.columns,
+        rows=self.df.to_dict('records'),
+        row_key='row_id'
+        ).classes('dense w-full overflow-auto').style('max-height: 600px;')
+        ui.input('Search by name/age').bind_value(self.table, 'filter')
+        
+
+        # Header slot
+        self.table.add_slot('header', r'''
+        <q-tr :props="props">
+            <q-th auto-width />
+            <q-th v-for="col in props.cols" :key="col.name" :props="props">
+                {{ col.label }}
+            </q-th>
+        </q-tr>
+        ''')
+        # self.table.add_slot('top-row', f'''
+        # <q-tr>
+        #     <q-td auto-width></q-td>
+        #     {''.join([f'<q-td>{{{{"{totals[col]}"}}}}</q-td>' for col in df_pivot.columns if col not in ["row_id"]])}
+        # </q-tr>
+        # ''')
+        # Body slot: dynamiskt generera popup-edit för varje kolumn
+        self.table.add_slot('body', r'''
+        <q-tr :props="props">
+            <q-td auto-width>
+                <q-btn size="sm" color="warning" round dense icon="delete"
+                    @click="() => $parent.$emit('delete', props.row)" />
+            </q-td>
+            <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                <template v-if="col.name !== 'delete'">
+                    {{ props.row[col.field] }}
+                    <q-popup-edit v-model="props.row[col.field]" v-slot="scope"
+                        @update:model-value="() => $parent.$emit('rename', props.row)">
+                        <q-input
+                            :type="typeof props.row[col.field] === 'number' ? 'number' : 'text'"
+                            v-model="scope.value"
+                            dense autofocus counter
+                            :step="typeof props.row[col.field] === 'number' ? 10 : undefined"
+                            @keyup.enter="scope.set"
+                        />
+                    </q-popup-edit>
+                </template>
+            </q-td>
+        </q-tr>
+        ''')
+
+        # Bottom row
+        with self.table.add_slot('bottom-row'):
+            with self.table.cell().props(f'colspan={len(self.columns)+1}'):
+                ui.button('Add row', icon='add', color='accent', on_click=self.add_row).classes('w-60')
+        # self.add_totals()
+        self.table.on('rename', self.rename)
+        self.table.on('delete', self.delete)
+
+    def add_row(self) -> None:
+        if not self.table.rows:
+            ui.notify("Ingen rad att duplicera")
+            return
+        last_row = self.table.rows[-1].copy()
+        new_id = max(row['row_id'] for row in self.table.rows) + 1
+        last_row['row_id'] = new_id
+        # Lägg till i tabellen
+        self.table.rows.append(last_row)
+        self.table.update()
+        ui.notify(f"Duplicerade sista raden som ID {new_id}")
+
+
+    def _update_search(self, value: str):
+        self.search_term = value.lower()
+        self.apply_filters()
+
+    def apply_filters(self):
+        filtered_rows = []
+        for field in ['candidate_id', 'contract_id']:
+            if field in cand and self.search_term in str(cand[field]).lower():
+                search_match = True
+                break
+
+
+df_contracts, df_assignments = populate_dummy_contracts_df(5, 5)
+df_pivot = df_assignments.pivot_table(
+    index=["candidate_id", "contract_id"],
+    columns="month",
+    values="allocation_percent",
+    fill_value=0
+).reset_index()
+
+print("\n=== KONTRAKT ===")
+print(df_contracts)
+print("\n=== ALLOKERINGAR ===")
+print(df_assignments)
+df_project_month = df_assignments.groupby(["contract_id", "month"], as_index=False)["allocation_percent"].sum()
+df_candidate_month = df_assignments.groupby(["candidate_id", "month"], as_index=False)["allocation_percent"].sum()
+print("\n=== PROJEKT-MÅNAD TOTAL ===")
+
+AllocationTable(df_assignments)
 ui.run(port=8004)

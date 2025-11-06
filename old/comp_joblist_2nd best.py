@@ -12,14 +12,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'b
 from models import RequirementPayload, JobRequest
 
 class JobList:
-    def __init__(self, jobs: List[dict], api_client):
+    def __init__(self, jobs: List[dict]):
         print("Initial jobs:", jobs)  # Debug: Verify input data
         job_objects = [JobRequest(**j) for j in jobs]
         self.jobs_map = {j.job_id: j for j in job_objects}
         self.jobs_list = []
-        self.api_client = api_client
-        self.controller = api_client.controller
-
 
         for job in job_objects:
             job_dict = job.model_dump(exclude_none=True)
@@ -31,15 +28,15 @@ class JobList:
             else:
                 job_dict['days_left'] = "N/A"
             job_dict['expanded'] = False
-            # job_dict['status'] = job_dict.get('status', job_dict.get('state', '1-Open')) if job_dict.get('status', job_dict.get('state', '1-Open')) in ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"] else "1-Open"
+            job_dict['status'] = job_dict.get('status', job_dict.get('state', '1-Open')) if job_dict.get('status', job_dict.get('state', '1-Open')) in ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"] else "1-Open"
             self.jobs_list.append(job_dict)
-        # print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
+        print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
 
         self.valid_states = ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"]
 
         self.preferred_column_order = [
             'job_id', 'customer', 'title', 'contact_person', 'start_date', 'duration', 'due_date',
-            'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
+            'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'status', 'details', 'actions'
         ]
 
         self.all_columns = [
@@ -54,7 +51,7 @@ class JobList:
             {"name": "candidates", "label": "Candidates", "field": "candidates", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
             {"name": "highest_candidate_status", "label": "Top Candidate Status", "field": "highest_candidate_status", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
             {"name": "assigned_to", "label": "Assigned To", "field": "assigned_to", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-            {"name": "state", "label": "State", "field": "state", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
+            {"name": "status", "label": "Status", "field": "status", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
             {"name": "details", "label": "Details", "field": "details", "sortable": False, "style": "max-width: 100px;", "align": "center"},
             {"name": "actions", "label": "", "field": "actions", "sortable": False, "style": "width: 50px;", "align": "center"}
         ]
@@ -84,10 +81,24 @@ class JobList:
         ).classes("table-fixed w-full max-w-full")
 
         self.table.bind_filter_from(search_input, 'value')
-        status_options = self.controller.job_states_name_list
+        status_options = ['1-Open', '2-In Progress', '3-Offered', '4-Contracted']
+        status_options_js = json.dumps(status_options)  # → '["1-Open", "2-In Progress", ...]'
 
         with self.table:
-            
+            self.table.add_slot('body-cell-status', f'''
+                <q-td key="status" :props="props">
+                    <q-select
+                        dense
+                        outlined
+                        emit-value
+                        map-options
+                        v-model="props.row.status"
+                        :options={status_options_js}
+                        @update:model-value="$parent.$emit('status_change', {{job_id: props.row.job_id, new_status: props.row.status}})"
+                        style="min-width: 130px"
+                    />
+                </q-td>
+            ''')
             self.table.add_slot(
                 "body-cell-details",
                 r'''
@@ -129,11 +140,20 @@ class JobList:
                                 {{ props.row.days_left || 'N/A' }}
                             </span>
                         </template>
-                        <template v-else-if="col.name === 'state'">
-                            <q-select dense outlined
-                                v-model="props.row.state"
-                                :options="''' + str(status_options) + r'''"                  
-                                @update:model-value="$parent.$emit('status_change', {job_id: props.row.job_id, new_status: props.row.state})"
+                        <template v-else-if="col.name === 'status'">
+                            <q-select
+                                dense
+                                outlined
+                                emit-value
+                                map-options
+                                v-model="props.row.status"
+                                :options="[
+                                    { label: '🟢 Open', value: '1-Open' },
+                                    { label: '🟡 In Progress', value: '2-In Progress' },
+                                    { label: '🔵 Offered', value: '3-Offered' },
+                                    { label: '⚫ Contracted', value: '4-Contracted' }
+                                ]"
+                                @update:model-value="$parent.$emit('status_change', {job_id: props.row.job_id, new_status: props.row.status})"
                                 style="min-width: 150px"
                             />
                         </template>                        
@@ -193,13 +213,22 @@ class JobList:
         print(f"Jobs list after toggle: {self.jobs_list}")
         self.table.update()
 
-    async def _on_status_change(self, event):
-        payload = event.args 
-        print(payload)
-        self.controller.job_id = payload.get('job_id')
-        self.controller.job_state = payload.get('new_status')
-        await self.api_client.api_post_job_status_update()
-        print(f"Status updated for job_id: {self.controller.job_id} to {self.controller.job_state}")
+    def _on_status_change(self, event):
+        # payload = event.args if isinstance(event, dict) else event
+        # job_id = payload.get('job_id')
+        # new_status = payload.get('new_status')
+        # print(f"Status change for job_id: {job_id}, new_status: {new_status}")
+        # if new_status not in self.valid_states:
+        #     ui.notify(f"Invalid status: {new_status}", type='negative')
+        #     return
+        # for job in self.jobs_list:
+        #     if job['job_id'] == job_id:
+        #         job['status'] = new_status
+        #         break
+        # self.jobs_map[job_id].status = new_status
+        # ui.notify(f"Status updated to {new_status} for job {job_id}", type='positive')
+        print(f"Jobs list after status update: ")
+        # self.table.update()
 
     def _on_action(self, event):
         print("--- _on_action triggered ---")

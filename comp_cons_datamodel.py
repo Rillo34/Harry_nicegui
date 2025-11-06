@@ -1,9 +1,14 @@
 import pandas as pd
 import random
 from nicegui import ui, events
+import asyncio
+
+# from nicegui.async_run import run_task
 
 class DataModelTable:
-    def __init__(self, df: pd.DataFrame) -> None:
+    def __init__(self, df: pd.DataFrame, API_client) -> None:
+        self.API_client = API_client
+        self.controller = API_client.controller
         self.df = df.copy()
         self.columns = [{'name': col, 'label': col, 'field': col, 'sortable': True} 
         for col in self.df.columns
@@ -20,7 +25,7 @@ class DataModelTable:
             rows=rows,
             row_key='id'
         )
-        ui.button('SAVE model', icon='save', color='primary', on_click=self.save_table).classes('w-30')
+        ui.button('SAVE model', icon='save', color='primary', on_click=self.save_table).classes('q-mt-md')
 
 
         # Header slot
@@ -102,15 +107,16 @@ class DataModelTable:
         row_id = e.args['id']
         print("Row ID: ", row_id)
         print("Direction: ", direction)
+        df_temp=pd.DataFrame(self.table.rows)
 
-        idx = self.df.index[self.df['id'] == row_id]
+        idx = df_temp.index[df_temp['id'] == row_id]
         if direction == 'up':
             if idx == 0:
                 ui.notify("Redan överst!")
                 return
             swap_idx = idx - 1
         elif direction == 'down':
-            if idx == len(self.df) - 1:
+            if idx == len(df_temp) - 1:
                 ui.notify("Redan längst ner!")
                 return
             swap_idx = idx + 1
@@ -118,12 +124,12 @@ class DataModelTable:
             ui.notify("Okänt riktning!")
             return
         # Byt plats på rader i df
-        self.df.iloc[idx], self.df.iloc[swap_idx] = self.df.iloc[swap_idx].copy(), self.df.iloc[idx].copy()
+        df_temp.iloc[idx], df_temp.iloc[swap_idx] = df_temp.iloc[swap_idx].copy(), df_temp.iloc[idx].copy()
 
         # Uppdatera table
-        self.table.rows = self.df.to_dict('records')
+        df_temp['id'] = range(1, len(df_temp) + 1)
+        self.table.rows = df_temp.to_dict('records')
         self.table.update()
-
 
 
     def rename(self, e: events.GenericEventArguments) -> None:
@@ -139,21 +145,117 @@ class DataModelTable:
         ui.notify(f'Deleted row {e.args["id"]}')
         self.table.update()
 
-    def save_table(self) -> None:
+    async def send_model_to_backend(self):
+        #send to backend
+        print("Sending data model to backend...")
+        print("list of states:", self.controller.job_states_list)
+        print("name_list:", self.controller.job_states_name_list)
+        print("mapping dict :", self.controller.job_states_mapping_dict)
+        await self.API_client.api_put_new_datamodel()
+        self.controller.job_states_mapping_dict = {}
+        ui.notify("Data model sent to backend")
+
+
+    async def save_table(self) -> None:
         print("Saving table...")
-        self.df = pd.DataFrame(self.table.rows)
-        print(self.df)
+        def show_mapping_dialog(changed, new_names, df_new):
+            print("Showing mapping dialog...")
+            with ui.dialog() as dialog, ui.card():
+                ui.label("Some earlier states are changed/removed, pls map to new states:").classes('text-h6')
+                mappings = {}
+                for old_state in changed:
+                    with ui.row().classes('items-center q-gutter-sm'):
+                        ui.label(old_state)
+                        mappings[old_state] = ui.select(
+                            options=new_names, 
+                            label="Map to new state")
 
-def get_df():   
-        rows = [
-        {"id": 1, "name": "1-Open", "description": "desc1", "is_default": True},
-        {"id": 2, "name": "2-In Progress", "description": "desc2", "is_default": False},
-        {"id": 3, "name": "3-Contracted", "description": "desc3", "is_default": False},
-        {"id": 4, "name": "On Hold", "description": "desc4", "is_default": False},
-        {"id": 5, "name": "Cancelled", "description": "desc5", "is_default": False},
-        ]
-        df = pd.DataFrame(rows)
-        return df
+                async def confirm():
+                    mapping_result = {old: sel.value for old, sel in mappings.items()}
+                    print("Mapping:", mapping_result)
+                    print("controller mapping before:", self.controller.job_states_mapping_dict)
+                    self.controller.job_states_mapping_dict = mapping_result
+                    records = df_new.to_dict('records')
+                    if records:
+                        records[0]['is_default'] = True
+                        for r in records[1:]:
+                            r['is_default'] = False
+                    self.controller.job_states_list = records
+                    self.controller.job_states_name_list = new_names
+                    ui.notify("Mapping saved!")
+                    dialog.close()
+                    await self.send_model_to_backend()
+                    ui.notify("Data model saved!")
+                ui.button("Confirm mapping", color="primary", on_click=confirm)
+            dialog.open()
 
-# DataModelTable(get_df())
+        df_new = pd.DataFrame(self.table.rows)
+        old_names = self.df['name'].tolist()
+        new_names = df_new['name'].tolist()
+        print("Old names: ", old_names)
+        print("New names: ", new_names)
+        changed = [n for n in old_names if n not in new_names]
+        added = [n for n in new_names if n not in old_names]
+        print("Changed or deleted states: ", changed)
+        print("Added states: ", added)
+        anychanged = bool(changed or added)
+
+        if anychanged:
+            if changed:
+                ui.notify(f"Removed or changed states: {', '.join(changed)}")
+                show_mapping_dialog(changed, new_names, df_new)
+            elif added:
+                ui.notify(f"Added new states only: {', '.join(added)}")
+                self.controller.job_states_mapping_dict = {}
+                ui.notify("Data model saved!")
+                records = df_new.to_dict('records')
+                if records:
+                    records[0]['is_default'] = True
+                    for r in records[1:]:
+                        r['is_default'] = False
+                self.controller.job_states_list = records
+                self.controller.job_states_name_list = new_names
+                await self.send_model_to_backend()
+
+            self.df = df_new.copy()
+        else:
+            if old_names == new_names:  # "No changes made."
+                ui.notify("No changes made to states.")
+                return
+            else:
+                print("Order of states changed.")
+                self.df = df_new.copy()
+                records = df_new.to_dict('records')
+                if records:
+                    records[0]['is_default'] = True
+                    for r in records[1:]:
+                        r['is_default'] = False
+                self.controller.job_states_list = records
+                self.controller.job_states_name_list = new_names
+                await self.send_model_to_backend()
+                ui.notify("Data model saved!")
+            
+
+
+            
+
+
+        
+
+    
+        
+
+
+
+# def get_df():   
+#         rows = [
+#         {"id": 1, "name": "1-Open", "description": "desc1", "is_default": True},
+#         {"id": 2, "name": "2-In Progress", "description": "desc2", "is_default": False},
+#         {"id": 3, "name": "3-Contracted", "description": "desc3", "is_default": False},
+#         {"id": 4, "name": "On Hold", "description": "desc4", "is_default": False},
+#         {"id": 5, "name": "Cancelled", "description": "desc5", "is_default": False},
+#         ]
+#         df = pd.DataFrame(rows)
+#         return df
+
 # ui.run(port=8004)
