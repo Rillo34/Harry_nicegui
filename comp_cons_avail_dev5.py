@@ -5,6 +5,37 @@ from datetime import datetime, timedelta
 from TEST_file import populate_dummy_contracts_df
 
 
+from nicegui import ui
+
+# 👇 Lägg CSS här – direkt efter importerna
+ui.add_head_html("""
+<style>
+.q-table td, .q-table th {
+    padding: 2px 6px !important;
+    font-size: 15px !important;
+    line-height: 1.2 !important;
+}
+.q-tr {
+    height: 22px !important;
+}
+.q-btn {
+    min-height: 18px !important;
+    height: 18px !important;
+    padding: 0 2px !important;
+    font-size: 11px !important;
+}
+.q-input {
+    font-size: 12px !important;
+    height: 20px !important;
+    padding: 0 4px !important;
+}
+.q-table__bottom, .q-table__top {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+</style>
+""")
+
 
 def get_df():   
     namn = [f'Namn_{i}' for i in range(1, 11)]
@@ -136,15 +167,16 @@ class AllocationTable:
                 ui.label('Infos')
 
         # totals=[]
-        self.table = ui.table(
-        columns=[{'name': 'delete', 'label': '', 'field': 'delete'}] + self.columns,
-        rows=self.df.to_dict('records'),
-        row_key='row_id'
-        ).classes('dense w-full overflow-auto').style('max-height: 600px;')
-        ui.input('Search by name/age').bind_value(self.table, 'filter')
+        self.search_input = ui.input('Search')  
+        with ui.scroll_area().style('height: 100vh; overflow-x: auto;'):           
+            self.table = ui.table(
+                columns=[{'name': 'delete', 'label': '', 'field': 'delete'}] + self.columns,
+                rows=self.df.to_dict('records'),
+                row_key='row_id',
+                ).classes('dense w-full')
+            self.table.style('font-size: 13px; line-height: 0.7;')
         
-
-        # Header slot
+        self.search_input.bind_value(self.table, 'filter')
         self.table.add_slot('header', r'''
         <q-tr :props="props">
             <q-th auto-width />
@@ -163,7 +195,7 @@ class AllocationTable:
         self.table.add_slot('body', r'''
         <q-tr :props="props">
             <q-td auto-width>
-                <q-btn size="sm" color="warning" round dense icon="delete"
+                <q-btn size="sm" color="warning" round dense flat icon="delete"
                     @click="() => $parent.$emit('delete', props.row)" />
             </q-td>
             <q-td v-for="col in props.cols" :key="col.name" :props="props">
