@@ -1,141 +1,123 @@
-from nicegui import ui
-
-# # Dummydata för kandidater
-# rows = [
-#     {'id': 1, 'name': 'Anna'},
-#     {'id': 2, 'name': 'Björn'},
-#     {'id': 3, 'name': 'Cecilia'},
-# ]
-
-# # Dynamisk lista med statusar (t.ex. från databasen)
-# status_list = [
-#     {'key': 'contacted', 'label': 'Kontaktad'},
-#     {'key': 'interviewed', 'label': 'Intervjuad'},
-#     {'key': 'offered', 'label': 'Erbjuden'},
-#     {'key': 'rejected', 'label': 'Avslagen'},
-# ]
-
-# # Tabell med meny längst till höger
-# table = ui.table(
-#     columns=[
-#         {'name': 'id', 'label': 'ID', 'field': 'id'},
-#         {'name': 'name', 'label': 'Namn', 'field': 'name'},
-#         {'name': 'actions', 'label': '', 'field': 'actions'},
-#     ],
-#     rows=rows,
-#     row_key='id'
-# ).classes('w-full')
-
-# # Generera menyval från status_list
-# status_items_html = "\n".join([
-#     f'''
-#     <q-item clickable v-close-popup
-#         @click="$parent.$emit('menu_action', {{action: 'set_status', row_id: props.row.id, status: '{status['key']}'}})">
-#         <q-item-section>{status['label']}</q-item-section>
-#     </q-item>
-#     ''' for status in status_list
-# ])
-
-# # Lägg till meny i tabellens actions-kolumn
-# table.add_slot(
-#     "body-cell-actions",
-#     f'''
-#     <q-td :props="props">
-#         <q-btn dense flat round icon="more_vert">
-#             <q-menu>
-#                 <q-list style="min-width: 150px">
-#                     <q-item-label header>Status</q-item-label>
-#                     {status_items_html}
-#                 </q-list>
-#             </q-menu>
-#         </q-btn>
-#     </q-td>
-#     '''
-# )
-
-# # Hantera menyval
-# # ui.on('menu_action', lambda e: ui.notify(f"Status för kandidat {e.args['row_id']} satt till: {e.args['status']}"))
-
+import nicegui
+import json
+import requests
+import httpx
 import pandas as pd
-import random
-from datetime import date, timedelta
+import asyncio
+from nicegui import events, ui
+# from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
+# from models import J
+from pydantic import parse_obj_as
+from comp_cons_avail_dev6 import ContractAllocationTable, ContractHoursTable, AbsenceTable
 
-# -----------------------------
-# Hjälpfunktioner
-# -----------------------------
-def months_between(start: date, end: date) -> list[str]:
-    """Returnerar en lista med YYYY-MM mellan start och end."""
-    months = []
-    current = date(start.year, start.month, 1)
-    while current <= end:
-        months.append(current.strftime("%Y-%m"))
-        # hoppa till nästa månad
-        if current.month == 12:
-            current = date(current.year + 1, 1, 1)
+import os
+import sys
+from faker import Faker
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+
+
+async def get_contract_alloc():
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                'http://127.0.0.1:8080/get-allocations'
+            )
+
+        if response.status_code == 200:
+            print(response)
+            print("det lyckades")
+            return response.json()
         else:
-            current = date(current.year, current.month + 1, 1)
-    return months
+            # ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+            return None
+
+    except Exception as e:
+        # ui.notify(f'Nätverksfel: {e}', type='warning')
+        return None
+
+async def get_contracts():
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                'http://127.0.0.1:8080/get-contracts'
+            )
+
+        if response.status_code == 200:
+            print(response)
+            print("det lyckades")
+            return response.json()
+        else:
+            # ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+            return None
+
+    except Exception as e:
+        # ui.notify(f'Nätverksfel: {e}', type='warning')
+        return None
+
+async def get_abscence():
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                'http://127.0.0.1:8080/get-abscence'
+            )
+
+        if response.status_code == 200:
+            print(response)
+            print("det lyckades")
+            return response.json()
+        else:
+            # ui.notify(f'Fel från backend: {response.status_code}', type='warning')
+            return None
+
+    except Exception as e:
+        # ui.notify(f'Nätverksfel: {e}', type='warning')
+        return None
+
+data = asyncio.run(get_contract_alloc())
+df = pd.DataFrame(data)
+df_contract_alloc=df.fillna("")
+print("---CONTRACT ALLOC ---\n")
+print(df_contract_alloc)
+
+data2 = data = asyncio.run(get_contracts())
+df2 = pd.DataFrame(data2)
+df_contract_hours=df2.fillna("")
+print("---CONTRACT HOURS ---\n")
+print(df_contract_hours)
+
+# data3 = asyncio.run(get_abscence())
+# df3 = pd.DataFrame(data3)
+# df_abscence=df3.fillna("")
+# print("---ABSCENCE---\n")
+# print(df_abscence)
+
+# df_contract_alloc =df_contract_alloc.drop(columns = ["allocation_percent"])
+# df_contract_subset = df_contract_hours[['contract_id', 'description', 'hours']].rename(columns={'hours':'contract_hours'})
+# df_merged_contract_alloc = df_contract_alloc.merge(df_contract_subset, on='contract_id', how='left')
+
+# first_cols = ['id','contract_id','description', 'contract_hours', 'candidate_id', 'hours']
+# other_cols = [c for c in df_merged_contract_alloc.columns if c not in first_cols]
+# df_merged_contract_alloc = df_merged_contract_alloc[first_cols + other_cols]
+    
+# print("---df_merged contract---\n")
+# print(df_merged_contract_alloc)
 
 
-def populate_dummy_contracts_df(num_contracts: int = 5, num_candidates: int = 12):
-    candidates = [f"CAND_{i+1}" for i in range(num_candidates)]
-    contracts = []
-    assignments = []
+with ui.tabs() as tabs:
+    tab_alloc = ui.tab('alloc', label='Allocation')
+    tab_hours = ui.tab('contracts', label='Contracts')
+    tab_abs = ui.tab('absence', label='Absence')
 
-    for i in range(num_contracts):
-        start_date = date.today() - timedelta(days=random.randint(0, 60))
-        end_date = start_date + timedelta(days=random.randint(60, 360))
+with ui.tab_panels(tabs, value='alloc').classes('w-full'):
+    with ui.tab_panel('alloc'):
+        alloc_table = ContractAllocationTable(df_contract_alloc)
+    with ui.tab_panel('contracts'):
+        contract_table = ContractHoursTable(df_contract_hours)
+    # with ui.tab_panel('absence'):
+    #     AbsenceTable(df_abscence)
+alloc_table.contract_table = contract_table
 
-        contract_id = i + 1
-        project_name = f"Projekt{contract_id}"
-        job_id = f"JOB_{random.randint(1, 10)}"
-        contracts.append({
-            "contract_id": contract_id,
-            "project": project_name,
-            "job_id": job_id,
-            "description": f"Dummy contract {contract_id} for {job_id}",
-            "start_date": start_date,
-            "end_date": end_date,
-            "contract_type": random.choice(["consulting", "employment"]),
-            "status": random.choice(["active", "completed", "void"]),
-            "estimated_value": round(random.uniform(50000, 250000), 2),
-            "hours": random.randint(40, 160),
-            "notes": random.choice([None, "Urgent", "Follow-up", "Initial phase"]),
-        })
-
-        assigned_candidates = random.sample(candidates, min(len(candidates), random.randint(1,3)))
-        months = months_between(start_date, end_date)
-
-        for cand in assigned_candidates:  # endast de valda kandidaterna
-            allocation = random.choice([10, 20, 25, 30, 40, 50])
-            for m in months:
-                assignments.append({
-                    "contract_id": project_name,
-                    "candidate_id": cand,
-                    "month": m,
-                    "allocation_percent": allocation
-                })
-
-    df_contracts = pd.DataFrame(contracts)
-    df_assignments = pd.DataFrame(assignments)
-
-    return df_contracts, df_assignments
-
-# -----------------------------
-# Testa funktionen
-# -----------------------------
-
-
-
-# -----------------------------
-# Bonus: Pivot per kandidat / månad
-# -----------------------------
-# df_pivot = df_assignments.pivot_table(
-#     index=["candidate_id", "contract_id"],
-#     columns="month",
-#     values="allocation_percent",
-#     fill_value=0
-# ).reset_index()
-
-# print("\n=== PIVOT ===")
-# print(df_pivot)
+ui.run(port=8007)

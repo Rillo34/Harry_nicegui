@@ -1,18 +1,25 @@
 import pandas as pd
 import random
-from nicegui import ui, events
 from datetime import datetime, timedelta
-from TEST_file import populate_dummy_contracts_df
+from nicegui import ui, events
+from pydantic import BaseModel
+from typing import List, Optional, Literal
+from datetime import datetime, date
+import uuid
+import os
+import sys
+# from TEST_file import populate_dummy_contracts_df
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+from models import ContractRequest, ContractAllocation, CandidateAway
 
 
-from nicegui import ui
 
 # 👇 Lägg CSS här – direkt efter importerna
 ui.add_head_html("""
 <style>
 .q-table td, .q-table th {
     padding: 2px 6px !important;
-    font-size: 15px !important;
+    font-size: 16px !important;
     line-height: 1.2 !important;
 }
 .q-tr {
@@ -37,35 +44,13 @@ ui.add_head_html("""
 """)
 
 
-def get_df():   
-    namn = [f'Namn_{i}' for i in range(1, 11)]
-    projekt = [f'Projekt_{chr(65+i)}' for i in range(10)]
-    månader = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
-
-    data = []
-    for n, p in zip(namn, projekt):
-        rad = {'namn': n, 'projekt': p}
-        rad.update({m: random.randint(10, 100) for m in månader})
-        data.append(rad)
-
-    df = pd.DataFrame(data)
-    df['row_id'] = df.index
-    return df
-
 
 class AllocationTable:
     def __init__(self, df_assignments: pd.DataFrame):
         self.original_df = df_assignments.copy()
         self.df_assignments = df_assignments.copy()
-        df_pivot = df_assignments.pivot_table(
-            index=["candidate_id", "contract_id"],
-            columns="month",
-            values="allocation_percent",
-            fill_value=0
-        ).reset_index()
-        print("df_pivot", df_pivot.head(5))
-        self.df = df_pivot.copy()
-        self.df["row_id"] = range(len(self.df))
+        self.df = df_assignments.copy()
+        # self.df["row_id"] = range(len(self.df))
         self.columns = [{'name': col, 'label': col, 'field': col, 'sortable': True} for col in self.df.columns]
         self.create_table()
         self.create_filter()
@@ -126,57 +111,50 @@ class AllocationTable:
             ui.tab('avail', label='Input', icon='person_search')
         with ui.tab_panels(tabs, value='h').classes('w-full'):
             with ui.tab_panel('project'):
-                ui.label('Summary per project/month')
-                df_project_month = self.df_assignments.pivot_table(
-                    index='contract_id',
-                    columns='month',
-                    values='allocation_percent',
-                    aggfunc='sum',
-                    fill_value=0
-                ).reset_index()                
-                rows = df_project_month.to_dict(orient='records')
+                ui.label('Summary per project/month')        
+                rows = self.df.to_dict(orient='records')
                 # Skapa kolumner
-                columns = [{'name': col, 'label': col, 'field': col} for col in df_project_month.columns]
-                projtable = ui.table(columns=columns, rows=rows).classes('dense w-full')
-            with ui.tab_panel('candidate'):
-                def get_columns(df):
-                    return [
-                        {
-                            'name': col,
-                            'label': col,
-                            'field': col,
-                            'sortable': True,
-                        }
-                        for col in df.columns
-                    ]
-                ui.label('Summary per candidate/month')
-                df_candidate_month = self.df_assignments.pivot_table(
-                    index='candidate_id',
-                    columns='month',
-                    values='allocation_percent',
-                    aggfunc='sum',
-                    fill_value=0
-                ).reset_index()
-                # rows = df_candidate_month.to_dict(orient='records')
-                columns = [{'name': col, 'label': col, 'field': col} for col in df_candidate_month.columns]
-                columns = get_columns(df_candidate_month)
-                candtable = ui.table(columns=columns, rows=rows).classes('dense w-full')
+                columns = [{'name': col, 'label': col, 'field': col} for col in self.df.columns]
+                self.table = ui.table(columns=columns, rows=rows).classes('dense w-full')
+            # with ui.tab_panel('candidate'):
+            #     def get_columns(df):
+            #         return [
+            #             {
+            #                 'name': col,
+            #                 'label': col,
+            #                 'field': col,
+            #                 'sortable': True,
+            #             }
+            #             for col in df.columns
+            #         ]
+            #     ui.label('Summary per candidate/month')
+            #     df_candidate_month = self.df_assignments.pivot_table(
+            #         index='candidate_id',
+            #         columns='month',
+            #         values='allocation_percent',
+            #         aggfunc='sum',
+            #         fill_value=0
+            #     ).reset_index()
+            #     # rows = df_candidate_month.to_dict(orient='records')
+            #     columns = [{'name': col, 'label': col, 'field': col} for col in df_candidate_month.columns]
+            #     columns = get_columns(df_candidate_month)
+            #     candtable = ui.table(columns=columns, rows=rows).classes('dense w-full')
                 
-                print (df_candidate_month.head(5))
+            #     print (df_candidate_month.head(5))
             with ui.tab_panel('a'):
                 ui.label('Infos')
 
         # totals=[]
-        self.search_input = ui.input('Search')  
-        with ui.scroll_area().style('height: 100vh; overflow-x: auto;'):           
-            self.table = ui.table(
-                columns=[{'name': 'delete', 'label': '', 'field': 'delete'}] + self.columns,
-                rows=self.df.to_dict('records'),
-                row_key='row_id',
-                ).classes('dense w-full')
-            self.table.style('font-size: 13px; line-height: 0.7;')
+        # self.search_input = ui.input('Search')  
+        # with ui.scroll_area().style('height: 100vh; overflow-x: auto;'):           
+        #     self.table = ui.table(
+        #         columns=[{'name': 'delete', 'label': '', 'field': 'delete'}] + self.columns,
+        #         rows=self.df.to_dict('records'),
+        #         row_key='row_id',
+        #         ).classes('dense w-full')
+        #     self.table.style('font-size: 13px; line-height: 0.7;')
         
-        self.search_input.bind_value(self.table, 'filter')
+        # self.search_input.bind_value(self.table, 'filter')
         self.table.add_slot('header', r'''
         <q-tr :props="props">
             <q-th auto-width />
@@ -247,23 +225,3 @@ class AllocationTable:
             if field in cand and self.search_term in str(cand[field]).lower():
                 search_match = True
                 break
-
-
-df_contracts, df_assignments = populate_dummy_contracts_df(5, 5)
-df_pivot = df_assignments.pivot_table(
-    index=["candidate_id", "contract_id"],
-    columns="month",
-    values="allocation_percent",
-    fill_value=0
-).reset_index()
-
-print("\n=== KONTRAKT ===")
-print(df_contracts)
-print("\n=== ALLOKERINGAR ===")
-print(df_assignments)
-df_project_month = df_assignments.groupby(["contract_id", "month"], as_index=False)["allocation_percent"].sum()
-df_candidate_month = df_assignments.groupby(["candidate_id", "month"], as_index=False)["allocation_percent"].sum()
-print("\n=== PROJEKT-MÅNAD TOTAL ===")
-
-AllocationTable(df_assignments)
-ui.run(port=8004)
