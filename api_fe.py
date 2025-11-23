@@ -59,6 +59,41 @@ class APIController:
             print('Fel vid API-anrop:', e)
             return []
     
+    async def requirement_matrix_eval(self):
+        rm_uploaded = self.controller.uploaded_req_matrix or self.controller.uploaded_cvs_req_matrix
+        print("in requirement_matrix_eval, rm_uploaded: ", rm_uploaded)
+        if not rm_uploaded:
+            ui.notify(f'You must upload Requirements matric', type='info')
+        else:
+            print("looking good")
+            files_to_send = [
+                ('cv_file', (
+                    self.controller.uploaded_cvs_req_matrix.name,
+                    self.controller.uploaded_cvs_req_matrix.content,
+                    self.controller.uploaded_cvs_req_matrix.type
+                )),
+                ('kravmatris_file', (
+                    self.controller.uploaded_req_matrix.name,
+                    self.controller.uploaded_req_matrix.content,
+                    self.controller.uploaded_req_matrix.type
+                ))
+            ]
+            
+            try:
+                print("sending to backend kravmatris")
+                response = requests.post(
+                    'http://127.0.0.1:8080/kravmatris',  # byt till din riktiga BE-URL
+                    files=files_to_send, # <-- Skickar alla filer i en enda dictionary
+                )
+                print("Responsens text: \n \n", response.text)
+                if response.status_code != 200:
+                    return False, f'Fel från backend: {response.status_code} - {response.text}'
+                
+                print("Raw response:", response)  
+                return response 
+                
+            except Exception as e:
+                return False, f'Ett fel uppstod: {e}'
 
     async def files_to_backend(self):
         files_uploaded = self.controller.uploaded_job_description or self.controller.uploaded_cvs
@@ -278,11 +313,13 @@ class UploadController:
     def __init__(self):
         self.job_id = ""
         self.job_description = ""
+        self.uploaded_req_matrix = ""
         self.start_date = ""
         self.customer = ""
         self.requirements = []
         self.uploaded_job_description = None  # ska vara NiceGUI UploadedFile
         self.uploaded_cvs = []  # lista av UploadedFile
+        self.uploaded_cvs_req_matrix = ""  # lista av UploadedFile för kravmatris, bara en fil nu
         self.shortlist_size = 3  # default
         self.candidates = []
         self.job_state = "NEW"

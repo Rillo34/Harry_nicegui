@@ -3,7 +3,7 @@ from comp_left_drawer import LeftDrawer
 # from comp_joblist import JobList
 from comp_joblist import JobList
 from comp_requirements import RequirementSection
-from comp_file_upload import FileUploadSection
+from comp_file_upload import FileUploadSection, ReqMatrixUploadSection  
 # from comp_candidate_table1 import CandidateTable, get_initial_data
 from comp_candidatejobs_table import CandidateJobsTable, get_initial_data
 from comp_jobcard_cand_jobs import JobCardCandidateJobs
@@ -155,6 +155,15 @@ async def datamodel_page():
     df = pd.DataFrame(data_model_response)
     data_model_display = DataModelTable(df, API_client)
     
+@ui.page('/reqmatrix')
+async def reqmatrix_page():
+    drawer = LeftDrawer()
+    ui.label('Requirement Matrix Page')
+    req_matrix_upload_section = ReqMatrixUploadSection(API_client)
+
+    
+
+
 
 @ui.page('/datavalidation')
 async def datavalidation_page():

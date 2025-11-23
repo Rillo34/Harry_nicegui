@@ -38,6 +38,8 @@ class DataTable:
 
         self.table.style('height: 100%; overflow-y: auto; overflow-x: auto;')
         self.add_remains_badge()
+        self.table.add_slot('bottom-row', self.add_summary_row(self.table.rows))
+
         
     def add_filter(self, fields_to_search):
         with ui.row().classes('items-center gap-2 mt-2'):
@@ -61,6 +63,8 @@ class DataTable:
             if any(term in str(value).lower() for value in row.values()):                
                 filtered.append(row)
         self.table.rows = filtered
+        self.add_summary_row(filtered)
+        print("antal filtrearde rader:", len(filtered))
         self.table.update()
     
     def _update_columns(self, hidden_columns: List[str]):
@@ -90,6 +94,49 @@ class DataTable:
                 </span>
             </q-td>
         ''')
+    def add_summary_row(self, rows):
+        exclude_from_summary = {
+            'candidate_id',
+            'project',
+            'contract_id',
+            'actions',
+            'start_date',
+            'end_date'
+        }   
+        cells = []
+
+        def to_float(v):
+            if v in (None, "", " ", "NaN"):
+                return 0
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return 0
+
+        for col in self.table.columns:
+            name = col['name']
+
+            # kolumnens label
+            if name == 'contract_id':
+                cells.append("<q-td class='text-bold'>Totals (filtered):</q-td>")
+                continue
+
+            # ska vi hoppa över kolumnen?
+            if name in exclude_from_summary:
+                cells.append("<q-td></q-td>")
+                continue
+
+            # om alla värden i kolumnen är numeriska → summera dem
+            try:
+                total = sum(to_float(row.get(name)) for row in rows)
+                cells.append(
+                    f"<q-td class='text-bold text-right'>{total}</q-td>"
+                )
+            except (ValueError, TypeError):
+                # kolumnen går inte att summera
+                cells.append("<q-td></q-td>")
+
+        return "<q-tr class='bg-grey-2'>" + "".join(cells) + "</q-tr>"
 
 
 
@@ -107,22 +154,9 @@ class ContractAllocationTable(DataTable):
         self.add_filter(['candidate_id', 'project', 'contract_id'])
         super().render()
         self.add_allocation_buttons()
-        self.add_summary_row()  # summera på filtrerade rader
+        # self.table.add_slot('bottom-row', self.add_summary_row(self.table.rows))
 
-    def add_summary_row(self):
-        current_rows = self.table.rows
-        total_alloc = sum(r['allocated_hours'] for r in current_rows)
-        total_remains = sum(r['remains'] for r in current_rows)
-
-        self.table.slots.pop('bottom-row', None)
-        self.table.add_slot('bottom-row', f'''
-            <q-tr>
-                <q-td colspan="3" class="text-right text-bold">Totals (filtered):</q-td>
-                <q-td>{total_alloc} h</q-td>
-                <q-td>{total_remains} h</q-td>
-            </q-tr>
-        ''')
-    # helper som subklasser kan använda
+    
 
 
     def add_allocation_buttons(self):
