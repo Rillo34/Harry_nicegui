@@ -16,6 +16,7 @@ from models import JobRequest
 ui_controller = UploadController()
 API_client = APIController(ui_controller)
 list_of_cvs = []
+import asyncio
 # Initialize with sample data to test UI rendering
 ui_controller.requirements = []
 list_of_requirements = []
@@ -127,10 +128,29 @@ async def candidate_jobs_page(job_id: str = None):
 @ui.page('/jobs-automate')
 async def jobs_automate_page():
     drawer = LeftDrawer()
-    job_list = await API_client.get_all_mails()
+    container = ui.column()  # plats för resultatet
 
-    print("joblist: ", job_list)
-    joblist_display = JobList(job_list)
+    async def get_mails_async(e):
+        mail_button.delete()
+
+        with container:
+            spinner = ui.spinner('dots', size='lg', color='blue')
+            label = ui.label('Fetching mails ...')
+
+        job_list = await API_client.get_all_mails()
+
+        spinner.delete()
+        label.delete()
+        print("joblist: ", job_list)
+        JobList(job_list, API_client)
+
+    mail_button = ui.button(
+        'Get jobs from Harry mailbox',
+        icon='outgoing_mail',
+        on_click=get_mails_async
+    ).classes('bg-blue-500 text-white')
+
+    
 
 
 
