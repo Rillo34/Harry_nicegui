@@ -15,6 +15,8 @@ class LeftDrawer:
             ui.button('Job automate', icon='work', on_click=lambda: ui.navigate.to('/jobs-automate')).classes('w-full justify-start mb-2 text-md')
             ui.button('Candidate Availability', icon='calendar_today', on_click=lambda: ui.notify('Candidate availability')).classes('w-full justify-start mb-2 text-md')
             ui.button('UC1 - Req Matrix', icon='file export', on_click=lambda: ui.navigate.to('/reqmatrix')).classes('w-full justify-start mb-2 text-md')
+            ui.button('UC2 - Company profile and match', icon='enterprise', on_click=lambda: ui.navigate.to('/companyjobfit')).classes('w-full justify-start mb-2 text-md')
+        
             ui.button('Pipeline', icon='schema', on_click=lambda: ui.notify('Pipeline')).classes('w-full justify-start mb-2 text-md')
             ui.button('Data Model', icon='account_tree', on_click=lambda: ui.navigate.to('/datamodel')).classes('w-full justify-start mb-2 text-md')
             ui.button('Dashboard', icon='dashboard', on_click=lambda: ui.notify('Dashboard')).classes('w-full justify-start mb-2 text-md')

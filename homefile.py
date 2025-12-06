@@ -155,11 +155,47 @@ async def datamodel_page():
     df = pd.DataFrame(data_model_response)
     data_model_display = DataModelTable(df, API_client)
     
+
 @ui.page('/reqmatrix')
 async def reqmatrix_page():
     drawer = LeftDrawer()
     ui.label('Requirement Matrix Page')
     req_matrix_upload_section = ReqMatrixUploadSection(API_client)
+
+
+@ui.page('/companyjobfit')
+async def company_jobfit_page():
+    drawer = LeftDrawer()
+    ui.label('Company profile and Job fit Page')
+    def fetch_company_summary():
+        company_id = ui_controller.company_id
+        print("Fetching company summary for company_id:", company_id)
+        summary = API_client.get_company_summary(company_id)
+        if summary:
+            ui_controller.company_summary = summary
+            ui.notify('Company summary fetched successfully')
+            print("Company summary:", summary)
+        else:
+            ui.notify('No summary found for the given company ID')
+            print("No summary found for company_id:", company   _id)
+    with ui.row().classes('items-center gap-2'):
+        company_id_input = ui.input('Company ID', value=str(ui_controller.company_id)).classes('w-48')
+        fetch_button = ui.button('Fetch Nexer Summary', on_click=lambda: fetch_company_summary()).classes('bg-blue-500 text-white')
+    ui.textarea('Company Summary', value=ui_controller.company_summary).classes('w-full h-48 mt-4')
+    match_button = ui.button('Match Jobs to Company', on_click=lambda: match_jobs_to_company()).classes('bg-green-500 text-white mt-4') 
+    async def match_jobs_to_company():
+        if not ui_controller.company_summary:
+            ui.notify('Please fetch the company summary first')
+            return
+        jobs = await API_client.get_all_jobs()
+        print(f"Matching {len(jobs)} jobs to company profile")
+        matched_results = await API_client.match_company_to_jobs(jobs, ui_controller.company_summary)
+        ui.notify(f"Matched {len(matched_results)} jobs to company profile")
+        for result in matched_results:
+            print(result)
+
+        
+
 
     
 
@@ -171,5 +207,9 @@ async def datavalidation_page():
     ui.label('Printing variables in ui_controller:')
     for key, value in ui_controller.__dict__.items():
         ui.label(f"{key}: {value}")
+    def clear_controller():
+        ui_controller.__dict__.clear()
+        ui.notify('Controller data raderad')
+    ui.button('Erase  controller-data', on_click=clear_controller)    
 
 ui.run(port=8005, reload=False)
