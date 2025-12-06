@@ -45,19 +45,20 @@ class APIController:
             return []
     
     async def get_all_mails(self):
+        print("in get all mails")
         try:
-            response = requests.get(
-                'http://127.0.0.1:8080/get-mails'
-            )
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get('http://127.0.0.1:8080/get-mails')
             if response.status_code == 200:
                 print(response)
                 return response.json()
             else:
                 print('Fel vid hämtning av jobb', response.status_code)
-                return []  # returnera tom lista istället för False
+                return []
         except Exception as e:
-            print('Fel vid API-anrop:', e)
+            print('Fel vid API-anrop:', repr(e))
             return []
+        
     
     async def requirement_matrix_eval(self):
         rm_uploaded = self.controller.uploaded_req_matrix or self.controller.uploaded_cvs_req_matrix
