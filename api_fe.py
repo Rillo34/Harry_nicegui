@@ -4,6 +4,7 @@ import requests
 import httpx
 from nicegui import events, ui
 from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
+from models import CompanyProfile, CompanyJobFit
 # from models import J
 from pydantic import parse_obj_as
 import inspect
@@ -307,7 +308,40 @@ class APIController:
         except Exception as e:
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
+    
+    async def api_get_company_summary (self, company_id):
+        print("in api_get_company_summary, company_id = ", company_id)
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"http://127.0.0.1:8080/company-profile?company_id={company_id}"
+                )
+                data = response.json()               # dict från BE
+                company_profile = CompanyProfile(**data)  # mappa till din modell
+                return company_profile
 
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+    async def match_company_to_jobs(self, company_id):
+        print("in api_get_company_jobfit, company_id = ", company_id)
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8080/company-match-jobs?company_id={company_id}"
+                )
+                data = response.json()               # dict från BE
+                print("data received from BE:", data)
+                company_job_fits = [CompanyJobFit(**item) for item in data]                
+                return company_job_fits
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
 
 
 class UploadController:
@@ -329,6 +363,10 @@ class UploadController:
         self.job_states_mapping_dict = {}  # mapping old states to new states
         self.candidate_states_list = []
         self.highest_candidate_status = ""
+        self.company_id = ""
+        self.company_name = ""
+        self.company_summary = ""
+        self.matched_results = []
 
     def add_requirement(self, requirement_object):
         """Lägger till ett nytt krav i listan om det inte redan finns."""
