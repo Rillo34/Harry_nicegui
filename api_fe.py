@@ -4,7 +4,9 @@ import requests
 import httpx
 from nicegui import events, ui
 from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
-from models import CompanyProfile, CompanyJobFit
+from models import CompanyProfile, CompanyJobFit, User, UsersPayload, NewSummary
+
+    
 # from models import J
 from pydantic import parse_obj_as
 import inspect
@@ -313,7 +315,7 @@ class APIController:
         print("in api_get_company_summary, company_id = ", company_id)
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
+                response = await client.get(
                     f"http://127.0.0.1:8080/company-profile?company_id={company_id}"
                 )
                 data = response.json()               # dict från BE
@@ -343,6 +345,70 @@ class APIController:
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
 
+    async def get_users(self, company_id):
+        print("in api_get_users, company_id = ", company_id)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8080/get-company-users",
+                    params={"company_id": company_id}
+                )
+                data = response.json()               # dict från BE
+                print("data received from BE:", data)
+                company_users = [User(**item) for item in data]                
+                return company_users
+
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+    async def put_users(self, new_users):
+        print("in api_put_users, company_id = ", self.controller.company_id)
+        print("new users :", new_users)
+        payload = {
+            "new_users": new_users,
+            "company_id": self.controller.company_id
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"http://127.0.0.1:8080/put-company-users",
+                    json=payload 
+                )
+                data = response               # dict från BE
+                print("data received from BE:", data)        
+                return data
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+    
+    async def put_new_summary(self, new_summary):
+        print("in api_put_summary, company_id = ", self.controller.company_id)
+        print("summary ", new_summary)
+        payload = {
+            "summary": new_summary,
+            "company_id": self.controller.company_id
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"http://127.0.0.1:8080/put-new-summary",
+                    json=payload 
+                )
+                data = response               # dict från BE
+                print("data received from BE:", data)        
+                return data
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+
 
 class UploadController:
     def __init__(self):
@@ -366,7 +432,10 @@ class UploadController:
         self.company_id = ""
         self.company_name = ""
         self.company_summary = ""
+        self.summary_exists=False
+        self.company_industry =""
         self.matched_results = []
+        self.user = ""
 
     def add_requirement(self, requirement_object):
         """Lägger till ett nytt krav i listan om det inte redan finns."""

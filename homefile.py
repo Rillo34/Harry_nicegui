@@ -8,7 +8,7 @@ from comp_file_upload import FileUploadSection, ReqMatrixUploadSection
 from comp_candidatejobs_table import CandidateJobsTable, get_initial_data
 from comp_jobcard_cand_jobs import JobCardCandidateJobs
 from comp_cons_datamodel import DataModelTable
-from comp_user_admin_dev import UserAdminDevComponent
+from comp_user_admin_dev import UserAdminDevComponent, CompanySummaryJobMatch
 import pandas as pd
 
 from api_fe import APIController, UploadController
@@ -151,7 +151,6 @@ async def jobs_automate_page():
         on_click=get_mails_async
     ).classes('bg-blue-500 text-white')
 
-    
 
 
 
@@ -187,60 +186,68 @@ async def reqmatrix_page():
 @ui.page('/companyjobfit')
 async def company_jobfit_page():
     drawer = LeftDrawer()
-    ui.label('Company profile and Job fit Page')
-    admin_instance = UserAdminDevComponent()
-    async def fetch_company_summary(company_id):
-        print("Fetching company summary for :", company_id)
-        company_profile = await API_client.api_get_company_summary(company_id)
-        if company_profile:
-            ui_controller.company_summary = company_profile.summary
-            ui_controller.company_id = company_profile.company_id
-            ui.notify('Company summary fetched successfully')
-            print("Company summary:", company_profile.summary)
-        else:
-            ui.notify('No summary found for the given company ID')
-            print("No summary found for company_id:", company_id)
-    with ui.row().classes('items-center gap-2'):
-        # company_id_input = ui.input('Company name', value=str(ui_controller.company_id)).classes('w-48')
-        fetch_nexer_button = ui.button('Fetch Nexer Summary', on_click=lambda: fetch_company_summary("nexer")).classes('bg-blue-500 text-white')
-        fetch_structor_button = ui.button('Fetch Structor Summary', on_click=lambda: fetch_company_summary("structor")).classes('bg-blue-500 text-white')
-    summary_area = ui.textarea('Company Summary').bind_value(ui_controller, 'company_summary').classes('w-full h-48 mt-4')
-    match_button = ui.button('Match Jobs to Company', on_click=lambda: match_jobs_to_company()).classes('bg-green-500 text-white mt-4') 
-    columns = [
-            {'name': 'job_id', 'label': 'Job_id', 'field': 'job_id', 'sortable': True, 'align': 'left'},
-            {'name': 'job_fit', 'label': 'Job fit', 'field': 'job_fit', 'sortable': True, 'align': 'left'},
-            {'name': 'customer', 'label': 'Customer', 'field': 'customer', 'sortable': True, 'align': 'left'},
-            {'name': 'title', 'label': 'Title', 'field': 'title', 'sortable': True, 'align': 'left'},
-            {'name': 'assessment', 'label': 'Assessment', 'field': 'assessment','sortable': True, 'align': 'left'},
-            {'name': 'recruiter', 'label': 'Recruiter', 'field': 'recruiter', 'sortable': True, 'align': 'left'}
-        ]
-    job_fit_table = ui.table(rows=[], columns=columns)
-    job_fit_table.classes('w-full h-64 text-left').props('wrap-cells').style('text-align: left; white-space: normal; word-break: break-word;')
+    with ui.tabs().classes('w-full') as tabs:
+        summary_tab = ui.tab('Company summary and job fit')
+        user_tab = ui.tab('User handling')
+    with ui.tab_panels(tabs, value = summary_tab).classes('w-full'):
+        with ui.tab_panel(summary_tab):
+            company_summary_job_match = CompanySummaryJobMatch(API_client)
+        with ui.tab_panel(user_tab):
+            admin_instance = UserAdminDevComponent(API_client)
     
-    # Lägg till din slot direkt vid deklarationen
-    job_fit_table.add_slot('body-cell-job_fit', '''
-        <q-td key="job_fit" :props="props">
-            <q-badge :color="props.value == 'OK' ? 'green' : 'red'">
-                {{ props.value }}
-            </q-badge>
-        </q-td>
-    ''')
 
-    async def match_jobs_to_company():
-        if not ui_controller.company_id:
-            ui.notify('Please fetch the company summary first')
-            return
-        # jobs = await API_client.match_company_to_jobs(ui_controller.company_id)
-        matched_results = await API_client.match_company_to_jobs(ui_controller.company_id)
-        ui_controller.matched_results = [fit.model_dump() for fit in matched_results]
-        job_fits = ui_controller.matched_results
-        ui.notify(f"Matched {len(matched_results)} jobs to company profile")
-        for result in matched_results:
-            print(result)
+    # async def fetch_company_summary(company_id):
+    #     print("Fetching company summary for :", company_id)
+    #     company_profile = await API_client.api_get_company_summary(company_id)
+    #     if company_profile:
+    #         ui_controller.company_summary = company_profile.summary
+    #         ui_controller.company_id = company_profile.company_id
+    #         ui.notify('Company summary fetched successfully')
+    #         print("Company summary:", company_profile.summary)
+    #     else:
+    #         ui.notify('No summary found for the given company ID')
+    #         print("No summary found for company_id:", company_id)
+    # with ui.row().classes('items-center gap-2'):
+    #     # company_id_input = ui.input('Company name', value=str(ui_controller.company_id)).classes('w-48')
+    #     fetch_nexer_button = ui.button('Fetch Nexer Summary', on_click=lambda: fetch_company_summary("nexer")).classes('bg-blue-500 text-white')
+    #     fetch_structor_button = ui.button('Fetch Structor Summary', on_click=lambda: fetch_company_summary("structor")).classes('bg-blue-500 text-white')
+    # summary_area = ui.textarea('Company Summary').bind_value(ui_controller, 'company_summary').classes('w-full h-48 mt-4')
+    # match_button = ui.button('Match Jobs to Company', on_click=lambda: match_jobs_to_company()).classes('bg-green-500 text-white mt-4') 
+    # columns = [
+    #         {'name': 'job_id', 'label': 'Job_id', 'field': 'job_id', 'sortable': True, 'align': 'left'},
+    #         {'name': 'job_fit', 'label': 'Job fit', 'field': 'job_fit', 'sortable': True, 'align': 'left'},
+    #         {'name': 'customer', 'label': 'Customer', 'field': 'customer', 'sortable': True, 'align': 'left'},
+    #         {'name': 'title', 'label': 'Title', 'field': 'title', 'sortable': True, 'align': 'left'},
+    #         {'name': 'assessment', 'label': 'Assessment', 'field': 'assessment','sortable': True, 'align': 'left'},
+    #         {'name': 'recruiter', 'label': 'Recruiter', 'field': 'recruiter', 'sortable': True, 'align': 'left'}
+    #     ]
+    # job_fit_table = ui.table(rows=[], columns=columns)
+    # job_fit_table.classes('w-full h-64 text-left').props('wrap-cells').style('text-align: left; white-space: normal; word-break: break-word;')
     
-        rows = [row for row in ui_controller.matched_results]
-        job_fit_table.rows = rows
-        job_fit_table.update()
+    # # Lägg till din slot direkt vid deklarationen
+    # job_fit_table.add_slot('body-cell-job_fit', '''
+    #     <q-td key="job_fit" :props="props">
+    #         <q-badge :color="props.value == 'OK' ? 'green' : 'red'">
+    #             {{ props.value }}
+    #         </q-badge>
+    #     </q-td>
+    # ''')
+
+    # async def match_jobs_to_company():
+    #     if not ui_controller.company_id:
+    #         ui.notify('Please fetch the company summary first')
+    #         return
+    #     # jobs = await API_client.match_company_to_jobs(ui_controller.company_id)
+    #     matched_results = await API_client.match_company_to_jobs(ui_controller.company_id)
+    #     ui_controller.matched_results = [fit.model_dump() for fit in matched_results]
+    #     job_fits = ui_controller.matched_results
+    #     ui.notify(f"Matched {len(matched_results)} jobs to company profile")
+    #     for result in matched_results:
+    #         print(result)
+    
+    #     rows = [row for row in ui_controller.matched_results]
+    #     job_fit_table.rows = rows
+    #     job_fit_table.update()
         
 
        
