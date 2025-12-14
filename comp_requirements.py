@@ -1,5 +1,5 @@
 from nicegui import ui
-from models import RequirementPayload
+from backend.models import RequirementPayload
 
 class RequirementSection:
     def __init__(self, controller):

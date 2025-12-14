@@ -6,8 +6,8 @@ import uuid
 import os
 import sys
 from faker import Faker
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
-from models import CandidatePayload, RequirementPayload, JobRequest
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+from backend.models import CandidatePayload, RequirementPayload, JobRequest
 fake = Faker()
 
 

@@ -4,11 +4,10 @@ import uuid
 import asyncio
 import sys
 import os
-import comp_candidate_table1
-from comp_left_drawer import LeftDrawer
-from comp_requirements import RequirementSection
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
-from models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult, ReEvaluateResponse, ReSize, ReSizeResponse
+import .comp_candidate_table1
+from .comp_left_drawer import LeftDrawer
+from .comp_requirements import RequirementSection
+from backend.models import RequirementPayload, EvaluateResponse, CandidateResultLong, RequirementResult, ReEvaluateResponse, ReSize, ReSizeResponse
 
 
 controller = api_fe.UploadController()

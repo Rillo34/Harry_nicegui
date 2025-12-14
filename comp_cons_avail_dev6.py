@@ -1,8 +1,14 @@
 # data_table.py
 import pandas as pd
+import matplotlib.pyplot as plt
 from nicegui import ui
 from typing import Dict, List, Set
 from datetime import date, datetime, timedelta
+import asyncio
+from .api_fe import APIController, UploadController
+import sys
+import os
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 
 
@@ -222,13 +228,12 @@ class ContractAllocationTable(DataTable):
                 rad['remains'] = new_remains
                 rad['allocated_total'] = new_total_alloc
 
-        for rad in self.contract_table.table.rows:
+        for rad in self.table.rows:
             if rad['contract_id'] == row['contract_id']:
                 rad['remains'] = new_remains
                 rad['allocated_total'] = new_total_alloc
         
         self.table.update()
-        self.contract_table.table.update()
 
     def add_remains_badge(self):
         self.table.add_slot('body-cell-remains', r'''
@@ -261,3 +266,85 @@ class AbsenceTable(DataTable):
     def render(self):
         super().render()
         self.add_filter(['candidate_id'])
+
+controller = UploadController()
+api_client = APIController(controller)
+
+async def get_contracts():
+    contracts = await api_client.get_contracts()
+    print(contracts)
+    return contracts
+
+async def get_allocations():
+    allocations = await api_client.get_allocations()
+    print(allocations)
+    return allocations
+
+
+contracts = asyncio.run(get_contracts())
+contract_df = pd.DataFrame(contracts)
+
+allocations = asyncio.run(get_allocations())
+allocation_df = pd.DataFrame(allocations)
+print(allocation_df)
+
+month_cols = [col for col in allocation_df.columns if col[:4].isdigit() and col[4] == '-']
+monthly_alloc = allocation_df.groupby('candidate_id')[month_cols].sum()
+monthly_alloc['Total'] = monthly_alloc.sum(axis=1)
+print(monthly_alloc)
+
+df_percent = allocation_df.copy()
+df_percent[month_cols] = df_percent[month_cols] / 150 
+# df_percent[month_cols] = df_percent[month_cols].round(0)
+for col in month_cols:
+    df_percent[col] = df_percent[col].apply(lambda x: f'{x:.0%}')
+print("----DF PERCENT ----", df_percent)
+
+def handle_select(e):
+    # e.value innehåller det valda alternativet
+    selected_plot = e.value
+    ui.notify(f'Du valde: {selected_plot}')
+    # här kan du lägga logik för att visa rätt plot
+    if selected_plot == 'plot1':
+        ui.label("ettan")
+    elif selected_plot == 'plot2':
+        ui.label("tvåan")
+    elif selected_plot == 'plot3':
+        ui.label("trean")
+
+with ui.column().classes('w-full'):
+    with ui.tabs().classes('w-full') as tabs:
+        contract_tab = ui.tab('Contracts')
+        allocation_tab = ui.tab('Allocations abs')
+        percent_tab = ui.tab('Allocations %')
+        plot_tab = ui.tab('Plots')
+    with ui.tab_panels(tabs, value = contract_tab).classes('w-full'):
+        with ui.tab_panel(contract_tab):
+            contract_table = DataTable(contract_df)
+        with ui.tab_panel(allocation_tab):
+            allocation_table = ContractAllocationTable(allocation_df)
+        with ui.tab_panel(plot_tab):
+            plots = ['plot1', 'plot2', 'plot3']
+            plot_area = ui.column()
+
+            def handle_select(e, area):
+                area.clear()
+                if e.value == 'plot1':
+                    fig, ax = plt.subplots(figsize=(12,6))
+                    monthly_alloc[month_cols].T.plot(kind='bar', stacked=True, ax=ax)
+                    ax.set_title('Allokering per månad (stacked per kandidat)')
+                    ax.set_ylabel('Allokerade timmar')
+                    ax.set_xlabel('Månad')
+                    ax.legend(title='Kandidat', bbox_to_anchor=(1.05, 1), loc='upper left')
+                    area.add(ui.matplotlib(fig))   # <-- rendera i NiceGUI
+                elif e.value == 'plot2':
+                    fig, ax = plt.subplots()
+                    monthly_alloc.T.plot(kind='bar', ax=ax)
+                    area.add(ui.matplotlib(fig))
+            ui.select(options=plots, value=plots[1], on_change=lambda e: handle_select(e, plot_area))
+        with ui.tab_panel(percent_tab):
+            percent_table = ContractAllocationTable(df_percent)
+            
+
+ui.run(port = 8007)
+

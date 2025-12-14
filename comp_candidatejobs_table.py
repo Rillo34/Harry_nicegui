@@ -8,12 +8,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / 'backend'))
 from nicegui import ui
 from typing import List, Dict
 from datetime import date
-from models import CandidateResultLong, RequirementResult
+from backend.models import CandidateResultLong, RequirementResult
 
 from nicegui import ui
 from typing import List, Dict
 from datetime import date
-from models import CandidateResultLong, RequirementResult
 
 
 

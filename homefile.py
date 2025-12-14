@@ -1,18 +1,18 @@
 from nicegui import ui
-from comp_left_drawer import LeftDrawer
+from .comp_left_drawer import LeftDrawer
 # from comp_joblist import JobList
-from comp_joblist import JobList
-from comp_requirements import RequirementSection
-from comp_file_upload import FileUploadSection, ReqMatrixUploadSection  
+from .comp_joblist import JobList
+from .comp_requirements import RequirementSection
+from .comp_file_upload import FileUploadSection, ReqMatrixUploadSection  
 # from comp_candidate_table1 import CandidateTable, get_initial_data
-from comp_candidatejobs_table import CandidateJobsTable, get_initial_data
-from comp_jobcard_cand_jobs import JobCardCandidateJobs
-from comp_cons_datamodel import DataModelTable
-from comp_user_admin_dev import UserAdminDevComponent, CompanySummaryJobMatch
+from .comp_candidatejobs_table import CandidateJobsTable, get_initial_data
+from .comp_jobcard_cand_jobs import JobCardCandidateJobs
+from .comp_cons_datamodel import DataModelTable
+from .comp_user_admin_dev import UserAdminDevComponent, CompanySummaryJobMatch
 import pandas as pd
 
-from api_fe import APIController, UploadController
-from models import JobRequest, CompanyProfile, CompanyJobFit
+from .api_fe import APIController, UploadController
+from backend.models import JobRequest, CompanyProfile, CompanyJobFit
 
 ui_controller = UploadController()
 API_client = APIController(ui_controller)

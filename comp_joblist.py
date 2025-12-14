@@ -4,12 +4,11 @@ from typing import List, Optional
 from datetime import datetime, date
 import os
 import sys
-import fe_testfile
+from . import fe_testfile
 import json
 
 # Assuming backend models are in a separate module
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
-from models import RequirementPayload, JobRequest
+from backend.models import RequirementPayload, JobRequest
 
 class JobList:
     def __init__(self, jobs: List[dict], api_client):

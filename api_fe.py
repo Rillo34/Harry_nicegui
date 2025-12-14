@@ -3,8 +3,8 @@ import json
 import requests
 import httpx
 from nicegui import events, ui
-from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
-from models import CompanyProfile, CompanyJobFit, User, UsersPayload, NewSummary
+from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
+from backend.models import CompanyProfile, CompanyJobFit, User, UsersPayload, NewSummary
 
     
 # from models import J
@@ -408,6 +408,55 @@ class APIController:
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
 
+
+    async def get_contracts(self):
+        print("in get contracts")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8080/get-contracts",
+                )
+                data = response.json()               # dict från BE
+                print("data received from BE:", data)        
+                return data
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+
+    async def get_allocations(self):
+        print("in get allocations")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8080/get-allocations",
+                )
+                data = response.json()               # dict från BE
+                print("data received from BE:", data)        
+                return data
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+
+    async def get_contract_hours_table(self):
+        print("in get contracts")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8080/get-get-contracts-hours-table",
+                )
+                data = response               # dict från BE
+                print("data received from BE:", data)        
+                return data
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
 
 
 class UploadController:
