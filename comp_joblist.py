@@ -212,6 +212,7 @@ class JobList:
             return
         print("Clicked on:", row)
         if action == 'candidatejob':
+            self.controller.job_id = row.job_id
             ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')
             ui.notify(f"Navigating to candidate job {row.title}", type='info')
         elif action == 'edit':

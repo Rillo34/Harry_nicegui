@@ -1,123 +1,94 @@
-import nicegui
-import json
-import requests
-import httpx
-import pandas as pd
-import asyncio
-from nicegui import events, ui
-# from models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
-# from models import J
-from pydantic import parse_obj_as
-from comp_cons_avail_dev6 import ContractAllocationTable, ContractHoursTable, AbsenceTable
+from nicegui import ui
 
-import os
-import sys
-from faker import Faker
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
+# =========================
+# DATA (enda källan)
+# =========================
+scores = {
+    ('Job Asakfjdaskjbdaksndlaksnda', 'Cand 1'): 90,
+    ('Job Asakfjdaskjbdaksndlaksnda', 'Cand 2'): 65,
+    ('Job Asakfjdaskjbdaksndlaksnda', 'Cand 3'): 30,
+    ('Job Asakfjdaskjbdaksndlaksnda', 'Cand 4'): 75,
+    ('Job B', 'Cand 1'): 55,
+    ('Job B', 'Cand 2'): 85,
+    ('Job B', 'Cand 3'): 40,
+    ('Job B', 'Cand 4'): 60,
+    ('Job C', 'Cand 1'): 20,
+    ('Job C', 'Cand 2'): 45,
+    ('Job C', 'Cand 3'): 70,
+    ('Job C', 'Cand 4'): 95,
+    ('Job D', 'Cand 1'): 88,
+    ('Job D', 'Cand 2'): 52,
+    ('Job D', 'Cand 3'): 66,
+    ('Job D', 'Cand 4'): 10,
+}
 
+# =========================
+# CSS (endast för rotation)
+# =========================
+# ui.add_head_html('''
+# <style>
+# .rotate-45 {
+#     transform: rotate(-45deg);
+#     transform-origin: bottom left;
+#     white-space: nowrap;
+# }
+# </style>
+# ''')
 
-async def get_contract_alloc():
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                'http://127.0.0.1:8080/get-allocations'
-            )
+ui.add_head_html('''
+<style>
+.wrap-text {
+    white-space: normal !important;
+    word-break: break-word;
+    max-width: 80px;        /* justera */
+    text-align: center;
+}
+</style>
+''')
 
-        if response.status_code == 200:
-            print(response)
-            print("det lyckades")
-            return response.json()
-        else:
-            # ui.notify(f'Fel från backend: {response.status_code}', type='warning')
-            return None
-
-    except Exception as e:
-        # ui.notify(f'Nätverksfel: {e}', type='warning')
-        return None
-
-async def get_contracts():
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                'http://127.0.0.1:8080/get-contracts'
-            )
-
-        if response.status_code == 200:
-            print(response)
-            print("det lyckades")
-            return response.json()
-        else:
-            # ui.notify(f'Fel från backend: {response.status_code}', type='warning')
-            return None
-
-    except Exception as e:
-        # ui.notify(f'Nätverksfel: {e}', type='warning')
-        return None
-
-async def get_abscence():
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                'http://127.0.0.1:8080/get-abscence'
-            )
-
-        if response.status_code == 200:
-            print(response)
-            print("det lyckades")
-            return response.json()
-        else:
-            # ui.notify(f'Fel från backend: {response.status_code}', type='warning')
-            return None
-
-    except Exception as e:
-        # ui.notify(f'Nätverksfel: {e}', type='warning')
-        return None
-
-data = asyncio.run(get_contract_alloc())
-df = pd.DataFrame(data)
-df_contract_alloc=df.fillna("")
-print("---CONTRACT ALLOC ---\n")
-print(df_contract_alloc)
-
-data2 = data = asyncio.run(get_contracts())
-df2 = pd.DataFrame(data2)
-df_contract_hours=df2.fillna("")
-print("---CONTRACT HOURS ---\n")
-print(df_contract_hours)
-
-# data3 = asyncio.run(get_abscence())
-# df3 = pd.DataFrame(data3)
-# df_abscence=df3.fillna("")
-# print("---ABSCENCE---\n")
-# print(df_abscence)
-
-# df_contract_alloc =df_contract_alloc.drop(columns = ["allocation_percent"])
-# df_contract_subset = df_contract_hours[['contract_id', 'description', 'hours']].rename(columns={'hours':'contract_hours'})
-# df_merged_contract_alloc = df_contract_alloc.merge(df_contract_subset, on='contract_id', how='left')
-
-# first_cols = ['id','contract_id','description', 'contract_hours', 'candidate_id', 'hours']
-# other_cols = [c for c in df_merged_contract_alloc.columns if c not in first_cols]
-# df_merged_contract_alloc = df_merged_contract_alloc[first_cols + other_cols]
-    
-# print("---df_merged contract---\n")
-# print(df_merged_contract_alloc)
+# =========================
+# FÄRGLOGIK
+# =========================
+def score_color(score: int) -> str:
+    if score >= 80:
+        return 'green-2'
+    elif score >= 50:
+        return 'yellow-2'
+    return 'red-2'
 
 
-with ui.tabs() as tabs:
-    tab_alloc = ui.tab('alloc', label='Allocation')
-    tab_hours = ui.tab('contracts', label='Contracts')
-    tab_abs = ui.tab('absence', label='Absence')
+# =========================
+# UI – ALLT HÄR
+# =========================
+with ui.card().classes('w-full p-4'):
+    ui.label('Job × Candidate Match Grid').classes('text-xl font-bold mb-4')
 
-with ui.tab_panels(tabs, value='alloc').classes('w-full'):
-    with ui.tab_panel('alloc'):
-        alloc_table = ContractAllocationTable(df_contract_alloc)
-    with ui.tab_panel('contracts'):
-        contract_table = ContractHoursTable(df_contract_hours)
-    # with ui.tab_panel('absence'):
-    #     AbsenceTable(df_abscence)
-alloc_table.contract_table = contract_table
+    # Dimensioner direkt från dicten
+    jobs = sorted({job for job, _ in scores})
+    candidates = sorted({cand for _, cand in scores})
+    cols = len(jobs) + 1
 
+    # Header
+    with ui.grid(columns=cols).classes('gap-2'):
+        # header
+        ui.label('Candidate').classes('font-bold')
+        for job in jobs:
+            ui.label(job).classes('wrap-text text-sm')   
+
+        # body
+        for cand in candidates:
+            ui.label(cand).classes('font-bold')
+            for job in jobs:
+                score = scores.get((job, cand), 0)
+                color = score_color(score)
+                card = ui.card().classes(f'p-2 text-center bg-{color} cursor-pointer')
+                with card:
+                    ui.label(f'{score}%').classes('text-lg font-bold')
+                card.on('click', lambda e, c=cand, j=job, s=score: ui.notify(f'{c} vs {j}: {s}%'))
+
+
+
+# =========================
+# RUN
+# =========================
 ui.run(port=8007)

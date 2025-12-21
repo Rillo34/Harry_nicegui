@@ -74,7 +74,7 @@ class ReqMatrixUploadSection:
     async def populate_req_matrix(self):
         print("skickar till fylla i")
         resultat = await self.api_client.requirement_matrix_eval()
-        ui.label('Uploaded {resultat}').classes('text-sm font-medium text-gray-700 mb-1')
+        ui.label(f'Done! {resultat}').classes('text-sm font-medium text-gray-700 mb-1')
 
 
 

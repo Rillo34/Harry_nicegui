@@ -1,47 +1,52 @@
-#!/usr/bin/env python3
-from datetime import datetime
-from uuid import uuid4
+import pandas as pd
+from pandas.api.types import is_bool_dtype, is_numeric_dtype
 
 from nicegui import ui
 
-messages: list[tuple[str, str, str, str]] = []
+df = pd.DataFrame(data={
+    'col1': [x for x in range(4)],
+    'col2': ['This', 'column', 'contains', 'strings.'],
+    'col3': [x / 4 for x in range(4)],
+    'col4': [True, False, True, False],
+})
 
+def update(*, df: pd.DataFrame, r: int, c: int, value):
+    df.iat[r, c] = value
+    ui.notify(f'Set ({r}, {c}) to {value}')
 
-@ui.refreshable
-def chat_messages(own_id: str) -> None:
-    if messages:
-        for user_id, avatar, text, stamp in messages:
-            ui.chat_message(text=text, stamp=stamp, avatar=avatar, sent=own_id == user_id)
-    else:
-        ui.label('No messages yet').classes('mx-auto my-36')
-    ui.run_javascript('window.scrollTo(0, document.body.scrollHeight)')
+def delete_row(r):
+    df.drop(index=r, inplace=True)
+    ui.notify(f'Deleted row {r}')
+    ui.refresh()  # kräver NiceGUI 1.4+
 
+with ui.grid(rows=len(df.index)+1).classes('grid-flow-col'):
+    for c, col in enumerate(df.columns):
+        ui.label(col).classes('font-bold')
 
-@ui.page('/')
-async def main():
-    def send() -> None:
-        stamp = datetime.now().strftime('%X')
-        messages.append((user_id, avatar, text.value, stamp))
-        text.value = ''
-        chat_messages.refresh()
+        for r, row in enumerate(df.loc[:, col]):
 
-    user_id = str(uuid4())
-    avatar = f'https://robohash.org/{user_id}?bgset=bg2'
+            # välj komponent baserat på dtype
+            if is_bool_dtype(df[col].dtype):
+                cls = ui.checkbox
+                extra = {}
+            elif is_numeric_dtype(df[col].dtype):
+                cls = ui.number
+                extra = {"step": 10}
+            else:
+                cls = ui.input
+                extra = {}
 
-    ui.add_css(r'a:link, a:visited {color: inherit !important; text-decoration: none; font-weight: 500}')
-    with ui.footer().classes('bg-white'), ui.column().classes('w-full max-w-3xl mx-auto my-6'):
-        with ui.row().classes('w-full no-wrap items-center'):
-            with ui.avatar().on('click', lambda: ui.navigate.to(main)):
-                ui.image(avatar)
-            text = ui.input(placeholder='message').on('keydown.enter', send) \
-                .props('rounded outlined input-class=mx-3').classes('flex-grow')
-        ui.markdown('simple chat app built with [NiceGUI](https://nicegui.io)') \
-            .classes('text-xs self-end mr-8 m-[-1em] text-primary')
+            cls(
+                value=row,
+                on_change=lambda event, r=r, c=c: update(df=df, r=r, c=c, value=event.value),
+                **extra
+            )
 
-    await ui.context.client.connected()  # chat_messages(...) uses run_javascript which is only possible after connecting
-    with ui.column().classes('w-full max-w-2xl mx-auto items-stretch'):
-        chat_messages(user_id)
+    # Lägg till en extra kolumn med knappar
+    ui.label("Actions").classes("font-bold")
+    for r in range(len(df.index)):
+        with ui.row():
+            ui.button("Delete", color="red", on_click=lambda r=r: delete_row(r))
+            ui.button("Info", on_click=lambda r=r: ui.notify(f"Row {r}: {df.iloc[r].to_dict()}"))
 
-
-if __name__ in {'__main__', '__mp_main__'}:
-    ui.run(port = 8003)
+ui.run(port =8002)

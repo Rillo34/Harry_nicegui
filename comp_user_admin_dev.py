@@ -67,7 +67,7 @@ class UserAdminDevComponent:
     def edit_user(self, row: dict):
         """Open a dialog to edit a user's responsibility."""
         print("Editing user:", row)
-        with ui.dialog() as dialog, ui.card().classes('w-96 p-4'):
+        with ui.dialog() as dialog, ui.card().classes('w- p-4'):
             ui.label(f'Edit User: {row["name"]}').classes('text-lg font-bold')
             edited_name = ui.input(label='Name', value=row['name']).props('readonly').classes('w-full')
             edited_responsibility = ui.textarea(
@@ -140,8 +140,8 @@ class CompanySummaryJobMatch:
                 {'name': 'assessment', 'label': 'Assessment', 'field': 'assessment','sortable': True, 'align': 'left'},
                 {'name': 'recruiter', 'label': 'Recruiter', 'field': 'recruiter', 'sortable': True, 'align': 'left'}
             ]
-            self.job_fit_table = ui.table(rows=[], columns=columns).props('pagination.sortBy=job_fit pagination.descending=true wrap-cells')
-            self.job_fit_table.classes('w-full h-64 text-left').style('text-align: left; white-space: normal; word-break: break-word;')
+            self.job_fit_table = ui.table(rows=[], columns=columns, pagination={'rowsPerPage': 10, 'sortBy': 'job_fit'}).props('wrap-cells')
+            self.job_fit_table.classes('w-full h-128 text-left').style('text-align: left; white-space: normal; word-break: break-word;')
             
             # Lägg till din slot direkt vid deklarationen
             self.job_fit_table.add_slot('body-cell-job_fit', '''
@@ -159,7 +159,7 @@ class CompanySummaryJobMatch:
     
     def edit_summary(self):
         print("Editing summary")
-        with ui.dialog() as dialog, ui.card().classes('w-800 p-4'):
+        with ui.dialog() as dialog, ui.card().classes('w-1/3 p-4'):
             ui.label(f'Edit summary for  {self.ui_controller.company_id}').classes('text-lg font-bold')
             edited_summary = ui.textarea(
                 label='Company Summary',

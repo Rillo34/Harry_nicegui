@@ -93,13 +93,13 @@ class DataTable:
         self.table.add_slot('body-cell-remains', r'''
             <q-td :props="props">
                 <q-badge
-                    :color="props.row.remains > 50 ? 'red' : (props.row.remains < 0 ? 'orange' : 'green')"
+                    :color="props.row.remains > 30 ? 'red' : (props.row.remains < 0 ? 'orange' : 'green')"
                     align="middle"
                 >
                     {{ props.row.remains }} h
                 </q-badge>
                 <span class="text-caption q-ml-sm">
-                    {{ props.row.remains > 50 ? 'Need alloc' : (props.row.remains < 0 ? 'Over alloc' : 'ok') }}
+                    {{ props.row.remains > 30 ? 'Need alloc' : (props.row.remains < 0 ? 'Over alloc' : 'ok') }}
                 </span>
             </q-td>
         ''')
@@ -118,7 +118,7 @@ class DataTable:
                 <!-- Add 10% -->
                 <q-btn 
                     size="sm" dense color="purple" glossy
-                    icon="" 
+                    icon="content_copy" 
                     @click="$parent.$emit('editrow', {action: 'add', row: props.row})"
                     round
                 ></q-btn>
@@ -126,7 +126,7 @@ class DataTable:
                 <!-- Sub 10% -->
                 <q-btn 
                     size="sm" dense color="purple" glossy
-                    icon="remove" 
+                    icon="delete_forever" 
                     @click="$parent.$emit('editrow', {action: 'remove', row: props.row})"
                     round
                 ></q-btn>
@@ -259,18 +259,7 @@ def update_contract_summary_table():
     contract_summary_table.table.rows = df_summary.to_dict(orient='records')
     contract_summary_table.table.update()
 
-# contracts = asyncio.run(get_contracts())
-contracts = data_fetch_startup.get_contracts()
-contract_df = pd.DataFrame(contracts)
-print ("--contract ---\n", contract_df.head())
-contract_df.info()
 
-# allocations = asyncio.run(get_allocations())
-allocations = data_fetch_startup.get_allocations()
-
-allocation_df = pd.DataFrame(allocations)
-print("--allocations ---\n", allocation_df)
-allocation_df.info()
 
 
 # index=["candidate_id", "contract_id", "contract_hours", "start_date", "end_date"],
@@ -354,40 +343,6 @@ def get_contract_total_hours_df(alloc_df: pd.DataFrame, contract_df: pd.DataFram
 
 
 
-with ui.column().classes('w-full'):
-    with ui.tabs().classes('w-full') as tabs:
-        contract_base_tab = ui.tab('Contracts')
-        allocation_tab = ui.tab('Allocations % (edit)')
-        candidate_tab = ui.tab('Alloc summary %')
-        contract_tab = ui.tab('Contracts summary hours')
-    with ui.tab_panels(tabs, value = contract_tab).classes('w-full'):
-        is_allocation_table = False
-        with ui.tab_panel(contract_base_tab):
-            df = get_contract_total_hours_df(allocation_df, contract_df)
-            contract_df["remains"] = df["remains"]
-            contract_table = DataTable(contract_df)
-        with ui.tab_panel(allocation_tab):
-            df = get_allocations_perc_df(allocation_df)
-            allocation_table = DataTable(df)
-            allocation_table.add_allocation_buttons()
-            allocation_table.add_delete_and_copy_buttons()
 
-        with ui.tab_panel(candidate_tab):
-            df = get_candidate_perc_df(allocation_df)
-            candidate_summary_table = DataTable(df)
-        with ui.tab_panel(contract_tab):
-            df = get_contract_total_hours_df(allocation_df, contract_df)
-            # df = df[['contract_id', 'remains']]
-            new_contract_df = (
-                contract_df
-                .drop(columns=["remains"], errors="ignore")
-                .merge(
-                    df[['contract_id', 'remains']],
-                    on='contract_id',
-                    how='right'
-                )
-            )
-            contract_summary_table = DataTable(df)
 
-ui.run(port = 8007)
 

@@ -441,6 +441,22 @@ class APIController:
             print("Fel vid anrop:", e)
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
+        
+    async def get_allocations_perc(self):
+        print("in get allocations perc")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://127.0.0.1:8080/get-allocations-perc",
+                )
+                data = response.json()               # dict från BE
+                print("data received from BE:", data)        
+                return data
+                
+        except Exception as e:
+            print("Fel vid anrop:", e)
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
 
     async def get_contract_hours_table(self):
         print("in get contracts")
