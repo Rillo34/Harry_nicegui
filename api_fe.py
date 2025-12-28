@@ -180,7 +180,7 @@ class APIController:
     async def api_reevaluate(self):
         reeval_payload = ReEvaluateRequest(
             job_id=self.controller.job_id,
-            shortlist_size=self.controller.shortlist_size.value,
+            shortlist_size=self.controller.shortlist_size,
             requirements=self.controller.requirements
         )
 

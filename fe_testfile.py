@@ -1,3 +1,8 @@
+import random
+
+from backend.models import ShortCandidateAssessment 
+from backend.models import ShortFitList, CandidateResultShort
+
 
 def get_jobrequest():
     jobs = [
@@ -185,3 +190,56 @@ def get_jobrequest():
     return jobs
 
 
+def get_job_titles():
+    jobs = get_jobrequest()
+    titles = [job["title"] for job in jobs]
+    return titles
+
+def get_customers():   
+    jobs = get_jobrequest()
+    customers = list(set(job["customer"] for job in jobs))
+    return customers
+
+import random
+
+def generate_candidates(n: int):
+    candidates = []
+    for i in range(1, n + 1):
+        candidates.append(
+            CandidateResultShort(
+                candidate_id=f"CAND_{i:03d}",
+                job_fit=None,
+                availability_fit=None,
+                score=str(random.randint(0, 100))
+            )
+        )
+    return candidates
+
+
+def get_grid_values(job_id):
+    FIT_VALUES = ["EXCELLENT", "GOOD", "OK", "POOR"]
+    dummy_data = []
+
+    candidate_fits = []
+    recruiter=random.choice(["Anna", "Björn", "Carina", "David"])
+    for cand_index in range(1, 3):
+        candidate_fits.append(
+            ShortCandidateAssessment(
+                candidate_id=f"CAND_{cand_index:03d}",
+                job_fit=random.choice(FIT_VALUES),
+                availability_fit=random.choice(FIT_VALUES),
+                score=str(random.randint(50, 100)),
+                recruiter=recruiter
+            )
+        )
+
+    dummy_data.append(
+        ShortFitList(
+            job_id=job_id,
+            candidate_fit=candidate_fits
+        )
+    )
+
+    return dummy_data
+
+    
