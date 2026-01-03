@@ -85,6 +85,7 @@ class JobFitGrid:
 
     
     def build_ui(self):
+
         with ui.row().classes('w-full items-center'):
             model = {'sort_by': 'competence_fit'}
             label = ui.label().bind_text_from(model, 'sort_by', lambda v: f'Sorting by: {v}').classes('text-lg p-2 font-bold')

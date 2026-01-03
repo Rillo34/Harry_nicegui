@@ -16,10 +16,11 @@ class LeftDrawer:
             ui.button('Candidate Availability', icon='calendar_today', on_click=lambda: ui.notify('Candidate availability')).classes('w-full justify-start mb-2 text-md')
             ui.button('UC1 - Req Matrix', icon='rule', on_click=lambda: ui.navigate.to('/reqmatrix')).classes('w-full justify-start mb-2 text-md')
             ui.button('UC2 - Company profile and match', icon='business_center', on_click=lambda: ui.navigate.to('/companyjobfit')).classes('w-full justify-start mb-2 text-md')
+            ui.button('Admin panel', icon='admin_panel_settings', on_click=lambda: ui.navigate.to('/adminpanel')).classes('w-full justify-start mb-2 text-md')
             ui.button('Allocation', icon='emoji_people', on_click=lambda: ui.navigate.to('allocations')).classes('w-full justify-start mb-2 text-md')
             ui.button('Pipeline', icon='schema', on_click=lambda: ui.notify('Pipeline')).classes('w-full justify-start mb-2 text-md')
-            ui.button('Data Model', icon='account_tree', on_click=lambda: ui.navigate.to('/datamodel')).classes('w-full justify-start mb-2 text-md')
-            ui.button('Test Data', icon='manage', on_click=lambda: ui.notify('Test data')).classes('w-full justify-start mb-2 text-md')
+            # ui.button('Data Model', icon='account_tree', on_click=lambda: ui.navigate.to('/datamodel')).classes('w-full justify-start mb-2 text-md')
+            # ui.button('Test Data', icon='manage', on_click=lambda: ui.notify('Test data')).classes('w-full justify-start mb-2 text-md')
             ui.button('Data validate', icon='data', on_click=lambda: ui.navigate.to('/datavalidation')).classes('w-full justify-start mb-2 text-md')
             
 

@@ -1,4 +1,5 @@
-# data_table.py
+# THIS FILE IS FOR DEVELOPMENT AND TESTING OF COMPONENTS ONLY but it is the best one for AVAILABILITY DEVELOPMENT
+
 import pandas as pd
 import matplotlib.pyplot as plt
 from nicegui import ui
@@ -45,7 +46,7 @@ class DataTable:
                 rows=rows,
                 row_key="id",
                 pagination={"rowsPerPage": 20}
-            ).props('dense').classes('w-full no-wrap sticky-header')
+            ).props('dense').classes('w-full no-wrap sticky-header :row-props="props => props.row.name === \'Bob\' ? { style: \'background-color: #ffebee\' } : {}"')
 
         self.table.style('height: 100%; overflow-y: auto; overflow-x: auto;')
         self.add_remains_badge()
@@ -132,6 +133,11 @@ class DataTable:
                 ></q-btn>
             </q-td>
         ''')    
+        self.table.add_slot('body-cell')
+        def _(props):
+            ui.tooltip(f"Radinfo: {props['row']}")
+
+
         self.table.on('editrow', self._edit_row)
 
     def _edit_row(self, e):

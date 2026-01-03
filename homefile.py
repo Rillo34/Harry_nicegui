@@ -27,12 +27,11 @@ list_of_requirements = []
 
 @ui.page('/')
 def home_page():
-    ui.label('Welcome to Harry')
+    ui.label('Welcome to Harry - your AI-powered recruitment assistant').classes("text-xl")
     drawer = LeftDrawer()
     # Main content area
     with ui.column().classes("p-4"):
-        ui.image("Harry.jpg")
-        ui.label("Welcome!").classes("text-xl")
+        ui.icon('smart_toy').classes('text-9xl text-blue-600 mb-4')
         ui.label("Swipe from the left or use the menu button to open the drawer.")
 
 
@@ -264,5 +263,22 @@ async def datavalidation_page():
         ui_controller.__dict__.clear()
         ui.notify('Controller data raderad')
     ui.button('Erase  controller-data', on_click=clear_controller)    
+
+@ui.page('/adminpanel')
+async def admin_panel_page():
+    drawer = LeftDrawer()
+    ui.label('Admin panel')
+    ui.label('Settings for competence fit (from values):')
+    df = pd.DataFrame({ 'OK': [50], 'GOOD': [65], 'EXCELLENT': [80], }) 
+    def update(r, c, value): 
+        df.iat[r, c] = value 
+        ui.notify(f'Set ({r}, {c}) to {value}') 
+    with ui.grid(rows=len(df.index) + 1).classes('grid-flow-col'): 
+        for c, col in enumerate(df.columns): 
+            ui.label(col).classes('font-bold') 
+            for r, value in enumerate(df[col]): 
+                ui.number( value=value, on_change=lambda e, r=r, c=c: update(r, c, e.value) ) 
+
+
 
 ui.run(port=8009, reload=False)
