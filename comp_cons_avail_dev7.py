@@ -12,7 +12,9 @@ from pandas.api.types import is_bool_dtype, is_numeric_dtype
 import sys
 import re
 import os
+from datetime import date, datetime
 import backend.services as services
+from backend.models import ContractRequest, ContractAllocation
 import holidays
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
@@ -42,7 +44,7 @@ class DataTable:
         self.summary_row = {}
         if self.is_summary:
             self.add_summary_row()
-        print("the row", self.summary_row)
+        # print("the row", self.summary_row)
         self.render()        
             
 
@@ -84,8 +86,6 @@ class DataTable:
             </q-tr>
             '''
         )
-
-
             
     def add_filter(self, fields_to_search=None):
         with ui.row().classes('items-center gap-2 mt-2'):
@@ -149,39 +149,41 @@ class DataTable:
                 summary[col] = ''
         summary["contract_id"] = "SUMMARY"
         self.summary_row = summary
-              
-        
+
+#--- WORKING HOURS DF FUNCTION ---
+
+def get_working_hours_df():
+    def arbetsdagar(year, month):
+        sv_holidays = holidays.CountryHoliday('SE', years=[year])
+        dagar = []
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date = date(year + 1, 1, 1)
+        else:
+            end_date = date(year, month + 1, 1)
+        delta = timedelta(days=1)
+        current_date = start_date
+        while current_date < end_date:
+            if current_date.weekday() < 5 and current_date not in sv_holidays:
+                dagar.append(current_date)
+            current_date += delta
+        return dagar
     
+    rows = []
+    for year in range(2025, 2028):
+        for month in range(1, 13):
+            dagar = arbetsdagar(year, month)
+            rows.append({
+                "year": year,
+                "month": f"{month:02d}",
+                "arbetsdagar": len(dagar)
+            })
 
-        
-controller = UploadController()
-api_client = APIController(controller)
-
-async def get_contracts():
-    contracts = await api_client.get_contracts()
-    print(contracts)
-    return contracts
-
-async def get_allocations():
-    allocations = await api_client.get_allocations_perc()
-    print(allocations)
-    return allocations
-
-
-def arbetsdagar(year, month):
-    # Alla vardagar (mån–fre)
-    start = pd.Timestamp(year, month, 1)
-    end = start + pd.offsets.MonthEnd(1)
-    vardagar = pd.date_range(start, end, freq="B")
-
-    # Svenska helgdagar
-    se_holidays = holidays.Sweden(years=[year])
-
-    # Filtrera bort helgdagar
-    arbetsdagar = [d for d in vardagar if d not in se_holidays]
-
-    return arbetsdagar
-
+    arbetsdagar_df = pd.DataFrame(rows)
+    df_pivot = arbetsdagar_df.pivot(index="year", columns="month", values="arbetsdagar")
+    df_pivot = df_pivot * 8
+    return df_pivot.reset_index()
+    
 def clear_selection(table):
     if isinstance(table.selection, set):
         table.selection.clear()
@@ -191,7 +193,7 @@ def clear_selection(table):
 def add_groupby_radio(e): 
     if e.value == 'Group by contract':
         clear_selection(allocation_table.table)
-        allocation_table.table.selection = 'single'
+        allocation_table.table.selection = None
 
         df = (
             allocation_df
@@ -203,14 +205,14 @@ def add_groupby_radio(e):
             .reset_index()
         )
 
-        df['candidate_id'] = df['candidate_id'].apply(lambda x: ', '.join(map(str, x)))
+        # Gör listan till en sträng
+        df['candidate_id'] = df['candidate_id'].apply(lambda x: ', '.join(x))
 
-        # SKAPA UNIK ID FÖR VARJE RAD
-        df['id'] = df['contract_id'].apply(lambda x: f'contract_{x}')
+        # Kolumnordning: kontrakt → kandidater → månader
+        df = df[['contract_id', 'candidate_id'] + month_cols]
 
-        # Tvinga kolumnordning
-        df = df[['id', 'contract_id', 'candidate_id'] + month_cols]
         allocation_table.df = df
+
 
     elif e.value == 'Candidate':
         clear_selection(allocation_table.table)
@@ -228,12 +230,10 @@ def add_groupby_radio(e):
 
         df['contract_id'] = df['contract_id'].apply(lambda x: ', '.join(map(str, x)))
 
-        # SKAPA UNIK ID FÖR VARJE RAD
-        df['id'] = df['candidate_id'].apply(lambda x: f'candidate_{x}')
+        df = df[['candidate_id', 'contract_id'] + month_cols]
 
-        # Tvinga kolumnordning
-        df = df[['id', 'candidate_id', 'contract_id'] + month_cols]
         allocation_table.df = df
+
 
     else:
         allocation_table.df = allocation_df
@@ -253,94 +253,39 @@ def get_candidates_for_contract(contract_id):
     return allocated_candidates
 
 
-def edit_allocation():
-    contract_id = allocation_table.selected_contract_id
-    candidate_id = allocation_table.selected_candidate_id
+def update_allocations_for_contract(df, contract_id, new_candidates):
+    # Ta bort gamla rader för kontraktet
+    df = df[df["contract_id"] != contract_id].copy()
+    new_rows = []
+    next_id = df["id"].max() + 1 if not df.empty else 1
 
-    def delete_allocation(contract_id, candidate_id):
-        print(f"Deleting allocation for contract {contract_id}, candidate {candidate_id}")
-        allocation_df = allocation_table.df
-        allocation_df = allocation_df[
-            ~(
-                (allocation_df['contract_id'] == contract_id) &
-                (allocation_df['candidate_id'] == candidate_id)
-            )
-        ]
-        allocation_table.df = allocation_df
-        allocation_table.table.rows = allocation_table.df.to_dict(orient='records')
-        allocation_table.add_summary_row()
-        allocation_table.table.rows.insert(0, allocation_table.summary_row)
-        allocation_table.table.update()
-    
-    def update_allocation(contract_id, selected_candidates):
-        print(f"Updating allocation for contract {contract_id}, selected candidates: {selected_candidates}")
-        # Ta bort alla nuvarande allocationer för kontraktet
-        allocation_table.df = allocation_table.df[
-            allocation_table.df['contract_id'] != contract_id
-        ]
-        # Lägg till de valda kandidaterna
-        for candidate in selected_candidates:
-            allocation_table.df = pd.concat([allocation_table.df, pd.DataFrame([{
-                'id': None,
-                'contract_id': contract_id,
-                'candidate_id': candidate
-            }])], ignore_index=True)
+    for cand in new_candidates:
+        new_rows.append({
+            "id": next_id,
+            "contract_id": contract_id,
+            "candidate_id": cand
+        })
+        next_id += 1
+    df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+
+    return df
         
-        allocation_table.table.rows = allocation_table.df.to_dict(orient='records')
-        allocation_table.add_summary_row()
-        allocation_table.table.rows.insert(0, allocation_table.summary_row)
-        allocation_table.table.update()
+controller = UploadController()
+api_client = APIController(controller)
 
-    current_candidates = get_candidates_for_contract(contract_id)
-    print(f"Editing allocation for contract {contract_id}, current candidates: {current_candidates}")
-    options = current_candidates
-    # Skapa options för select
-    options = all_candidates
-    current_cand = {candidate: candidate for candidate in current_candidates}
+async def get_contracts():
+    contracts = await api_client.get_contracts()
+    print(contracts)
+    return contracts
 
-    with ui.dialog() as dialog:
-        with ui.card():
-            ui.label(f"Redigera allocation för kontrakt {contract_id}")
+async def get_allocations():
+    allocations = await api_client.get_allocations_perc()
+    print(allocations)
+    return allocations
 
-            ui.separator()
 
-            # DELETE
-            ui.label("Ta bort denna specifika allocation:")
-            ui.button(
-                "❌ Ta bort (contract + kandidat)",
-                color="red",
-                on_click=lambda: (
-                    delete_allocation(contract_id, candidate_id),
-                    dialog.close()
-                )
-            )
 
-            ui.separator()
 
-            # MULTI SELECT
-            ui.label("Redigera vilka kandidater som hör till kontraktet:")
-
-            candidate_select = ui.select(
-                options=options,
-                value=current_cand,
-                multiple=True,
-                label="Välj kandidater"
-            )
-
-            ui.button(
-                "💾 Spara ändringar",
-                color="green",
-                on_click=lambda: (
-                    update_allocation(contract_id, candidate_select.value),
-                    dialog.close()
-                )
-            )
-
-            ui.separator()
-
-            ui.button("Stäng", on_click=dialog.close)
-
-    dialog.open()
 
 def get_candidates_for_contract(contract_id): 
     return (allocation_df[allocation_df['contract_id'] == contract_id]['candidate_id'] .unique() .tolist())
@@ -362,65 +307,72 @@ def calculate_allocation_metrics(allocation_df):
 
     return allocation_df
 
+def get_contract_df(contracts):
+
+    for v in contracts:
+        v["month_hours"] = services.distribute_hours_over_months(
+                    v["start_date"],
+                    v["end_date"],
+                    v["contract_hours"]
+                )
+    for v in contracts: 
+        for key in ["start_date", "end_date", "created_at"]: 
+            if hasattr(v[key], "isoformat"): v[key] = v[key].isoformat()
+
+    contract_df = pd.DataFrame(contracts)
+    month_cols = contract_df["month_hours"].apply(pd.Series)
+    month_cols = month_cols.fillna(0)
+    contract_df = pd.concat([contract_df.drop(columns=["month_hours"]), month_cols], axis=1)
+    return contract_df
+
+def get_allocation_df(allocations):
+    allocation_df = pd.DataFrame(allocations)
+
+    # 1. Lägg till månadskolumner från contract_df
+    allocation_df = allocation_df.merge(
+        contract_df,  # global
+        on="contract_id",
+        how="left"
+    )
+
+    # 2. Hitta månadskolumner
+    month_cols = [col for col in allocation_df.columns if col.startswith("202")]
+
+    # 3. Räkna kandidater per kontrakt
+    candidates_per_contract = (
+        allocation_df.groupby("contract_id")["candidate_id"].nunique()
+    )
+
+    # 4. Dela timmar per kandidat
+    for col in month_cols:
+        allocation_df[col] = allocation_df[col] // allocation_df["contract_id"].map(candidates_per_contract)
+
+    return allocation_df
 
 
+# --- CONTRACTS---
 # contracts = asyncio.run(get_contracts())
-contracts = data_fetch_startup.get_contracts()
+contracts = [c.model_dump() for c in data_fetch_startup.get_contracts()]
+contract_df = get_contract_df(contracts)
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 200)
-
-for v in contracts:
-    v["month_hours"] = services.distribute_hours_over_months(
-                v["start_date"],
-                v["end_date"],
-                v["contract_hours"]
-            )
-    # print(f"Contract {v['contract_id']} total hours: {v['contract_hours']}, {v['start_date']} - {v['end_date']} month hours: {month_hours}")
-
-contract_df = pd.DataFrame(contracts)
-month_cols = contract_df["month_hours"].apply(pd.Series)
-month_cols = month_cols.fillna(0)
-# month_cols = month_cols.rename(columns=lambda x: f"{x:02d}-2024")
-contract_df = pd.concat([contract_df.drop(columns=["month_hours"]), month_cols], axis=1)
-print("Contract df with month hours:\n", contract_df)
 hidden_columns = ['contract_id', 'job_id', 'start_date', 'end_date', 'estimated_value', 'contract_hours', 'remains', 'contract_type', 'status', 'notes', 'created_at', 'allocations']
+all_contracts = contract_df['contract_id'].tolist()
 
-rows = []
-for year in range(2025, 2028):
-    for month in range(1, 13):
-        dagar = arbetsdagar(year, month)
-        rows.append({
-            "year": year,
-            "month": f"{month:02d}",
-            "arbetsdagar": len(dagar)
-        })
 
-arbetsdagar_df = pd.DataFrame(rows)
-print("arbetsdagar df:\n", arbetsdagar_df)
-df_pivot = arbetsdagar_df.pivot(index="year", columns="month", values="arbetsdagar")
-df_pivot = df_pivot * 8
-# DataTable(df_pivot.reset_index())
+# --- ALLOCATIONS ---
 
-allocations = data_fetch_startup.get_allocations()
-allocation_df = pd.DataFrame(allocations)
-all_candidates = allocation_df["candidate_id"].unique().tolist()
-month_cols = [c for c in contract_df.columns if c[:4].isdigit()]
-allocation_df = allocation_df.merge(
-    contract_df[['contract_id'] + month_cols],
-    on='contract_id',
-    how='left'
-)
-print("Allocation df before change:\n", allocation_df )
-allocation_df = calculate_allocation_metrics(allocation_df)
+allocations = [c.model_dump() for c in data_fetch_startup.get_allocations()]
+allocation_df_orig = pd.DataFrame(allocations)
+allocation_df = get_allocation_df(allocations)
+month_cols = [col for col in allocation_df.columns if col.startswith("202")]
+allocation_df = allocation_df[['id', 'contract_id', 'candidate_id'] + month_cols]
+all_candidates = allocation_df['candidate_id'].unique().tolist()
 
-all_candidates = sorted(allocation_df['candidate_id'].unique()) 
-all_contracts = sorted(allocation_df['contract_id'].unique())
-print("All candidates:", all_candidates)
-print("All contracts:", all_contracts)
+# --- WORKING HOURS---
 
-for cid in all_contracts:
-    candidates = get_candidates_for_contract(cid)
-    print(f"Candidates for contract {cid}: {candidates}")
+working_hours_df = get_working_hours_df()
+
 
 with ui.column().classes('w-full'):
     with ui.tabs().classes('w-full') as tabs:
@@ -446,7 +398,23 @@ with ui.column().classes('w-full'):
                     candidate_select.options = all_candidates
                     candidate_select.value = candidates  # rensa val
                     candidate_select.update()
+                    print("allocation df:\n", allocation_df_orig)
+                
+                def update_alloc_df_orig(e):
+                    global allocation_df_orig
+                    new_candidates = e.value               # list of candidate_ids
+                    contract_id = contract_select.value    # current contract_id
+                    # Uppdatera df
+                    df = update_allocations_for_contract(
+                        allocation_df_orig,
+                        contract_id,
+                        new_candidates
+                    )
+                    allocation_df_orig = df
+                    print("Updated allocation_df_orig:")
+                    print(allocation_df_orig)
 
+                    
 
                 with ui.row().classes("ml-10 gap-4"): # flyttar åt höger + luft mellan
                     contract_select = ui.select(
@@ -458,14 +426,15 @@ with ui.column().classes('w-full'):
                     candidate_select = ui.select(
                         options=all_candidates,
                         multiple=True,
-                        value=candidates,
-                        on_change=lambda e: ui.notify(f"Selected candidates: {e.value}. Contract = {contract_select.value}"),
+                        value=get_candidates_for_contract(contract_select.value) if contract_select.value else [],
+                        # on_change=lambda e: ui.notify(f"Selected candidates: {e.value}. Contract = {contract_select.value}"),
+                        on_change=lambda e: update_alloc_df_orig(e),
                         label="Candidates on contract"
                     ).classes("w-72")  # bredare
             allocation_table = DataTable(allocation_df, is_summary=True)
             # allocation_table.add_select()
         with ui.tab_panel(arbetsdagar_tab): 
-            arbetsdagar_table = DataTable(df_pivot.reset_index())
+            arbetsdagar_table = DataTable(working_hours_df)
 
 
      
