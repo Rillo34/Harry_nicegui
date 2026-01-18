@@ -4,21 +4,20 @@ from typing import List, Optional
 from datetime import datetime, date
 import os
 import sys
-from . import fe_testfile
 import json
 
 # Assuming backend models are in a separate module
 from backend.models import RequirementPayload, JobRequest
 
 class JobList:
-    def __init__(self, jobs: List[dict], api_client):
-        print("Initial jobs:", jobs)  # Debug: Verify input data
+    def __init__(self, jobs, callbacks):
         job_objects = [JobRequest(**j) for j in jobs]
+        self.on_status_change = callbacks["on_status_change"] 
+        self.status_options = callbacks["status_options"]
         self.jobs_map = {j.job_id: j for j in job_objects}
         self.jobs_list = []
-        self.api_client = api_client
-        self.controller = api_client.controller
 
+        # self.controller = ui.get_app_state().ui_controller
 
         for job in job_objects:
             job_dict = job.model_dump(exclude_none=True)
@@ -83,8 +82,7 @@ class JobList:
         ).classes("table-fixed w-full max-w-full")
 
         self.table.bind_filter_from(search_input, 'value')
-        status_options = self.controller.job_states_name_list
-
+        status_options = self.status_options
         with self.table:
             
             self.table.add_slot(
@@ -195,10 +193,9 @@ class JobList:
     async def _on_status_change(self, event):
         payload = event.args 
         print(payload)
-        self.controller.job_id = payload.get('job_id')
-        self.controller.job_state = payload.get('new_status')
-        await self.api_client.api_post_job_status_update()
-        print(f"Status updated for job_id: {self.controller.job_id} to {self.controller.job_state}")
+        job_id = payload.get('job_id')
+        job_state = payload.get('new_status')
+        await self.on_status_change(job_id, job_state)
 
     def _on_action(self, event):
         print("--- _on_action triggered ---")
@@ -211,23 +208,12 @@ class JobList:
             print(f"Could not find job with ID: {row_id}")
             return
         print("Clicked on:", row)
-        if action == 'candidatejob':
-            self.controller.job_id = row.job_id
-            ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')
-            ui.notify(f"Navigating to candidate job {row.title}", type='info')
-        elif action == 'edit':
-            ui.notify(f"Editing {row.title}", type='warning')
-        elif action == 'delete':
-            ui.notify(f"Deleting {row.title}", type='negative')
+        # if action == 'candidatejob':
+        #     self.controller.job_id = row.job_id
+        #     ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')
+        #     ui.notify(f"Navigating to candidate job {row.title}", type='info')
+        # elif action == 'edit':
+        #     ui.notify(f"Editing {row.title}", type='warning')
+        # elif action == 'delete':
+        #     ui.notify(f"Deleting {row.title}", type='negative')
 
-# @ui.page('/')
-# def main_page():
-#     initial_jobs = fe_testfile.get_jobrequest()
-#     print("Initial jobs from fe_testfile:", initial_jobs)
-#     if not initial_jobs:
-#         ui.label("No jobs available").classes("text-red-500")
-#     JobList(jobs=initial_jobs)
-#     status_options = ['1-Open', '2-In Progress', '3-Offered', '4-Contracted']
-#     ui.select(options=status_options, label='Test dropdown')  # ← Testa 
-
-# ui.run(port=8005, reload=False)

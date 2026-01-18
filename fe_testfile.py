@@ -1,7 +1,6 @@
 import random
 
-from backend.models import ShortCandidateAssessment 
-from backend.models import ShortFitList, CandidateResultShort
+
 
 
 def get_jobrequest():

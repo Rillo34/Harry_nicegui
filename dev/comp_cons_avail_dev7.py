@@ -285,6 +285,22 @@ def update_allocations_for_contract(df, contract_id, new_candidates):
     df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
 
     return df
+        
+controller = UploadController()
+api_client = APIController(controller)
+
+async def get_contracts():
+    contracts = await api_client.get_contracts()
+    print(contracts)
+    return contracts
+
+async def get_allocations():
+    allocations = await api_client.get_allocations_perc()
+    print(allocations)
+    return allocations
+
+
+
 
 
 def get_candidates_for_contract(contract_id): 
@@ -351,7 +367,8 @@ allocation_df_orig = pd.DataFrame(allocations)
 print ("Original allocations df:\n", allocation_df_orig)
 allocation_df = get_allocation_df(allocations)
 print("Allocation df after get_allocation_df:\n", allocation_df)
-
+# allocation_df = calculate_allocation_metrics(allocation_df)
+# print("Initial allocation df after calculate_allocation_metrics:\n", allocation_df)
 
 month_cols = [col for col in allocation_df.columns if col.startswith("202")]
 allocation_df = allocation_df[['id', 'contract_id', 'candidate_id'] + month_cols]
