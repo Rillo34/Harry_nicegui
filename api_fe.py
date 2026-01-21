@@ -4,7 +4,7 @@ import requests
 import httpx
 from nicegui import events, ui
 from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
-from backend.models import CompanyProfile, CompanyJobFit, User, UsersPayload, NewSummary, JobStatusUpdateRequest
+from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationRequest, NewSummary, JobStatusUpdateRequest
 
 
 class APIController:
@@ -73,6 +73,28 @@ class APIController:
     
     async def get_working_hours(self):
         return await self._request("GET", "/get-workinghour-table")
+    
+    async def delete_allocation(self, allocation_list):
+        # allocation_list är redan en lista av dicts med contract_id och candidate_id
+        print("API delete_allocation, allocation_list:", allocation_list)
+        payload = [
+            ContractAllocationRequest(
+                contract_id=item["contract_id"],
+                candidate_id=item["candidate_id"],
+                change=None
+            ).dict()
+            for item in allocation_list
+        ]
+        print("Payload for delete_allocation:", payload)
+        return await self._request("POST", "/delete-allocation", json=payload)
+    
+    async def change_allocation(self, contract_id, candidate_id, change):
+        payload = ContractAllocationRequest(
+            contract_id = contract_id,
+            candidate_id = candidate_id,
+            change = change
+        )
+        return await self._request("PATCH", "/change-allocation", json=payload.dict())
 
 
     # -----------------------------
@@ -159,6 +181,11 @@ class APIController:
             json={"job_id": self.controller.job_id}
         )
         return ReEvaluateResponse(**data) if data else None
+    
+    async def get_all_candidates(self):
+        data = await self._request("GET", "/get-all-candidates")
+        print(data)
+        return data
 
     # -----------------------------
     # COMPANY
@@ -185,14 +212,9 @@ class APIController:
         return await self._request("PUT", "/put-new-summary", json=payload)
 
     # -----------------------------
-    # CONTRACTS / ALLOCATIONS
+    # --- END
     # -----------------------------
 
-    async def get_contracts(self):
-        return await self._request("GET", "/get-contracts")
-
-    async def get_allocations(self):
-        return await self._request("GET", "/get-allocations")
 
 class UploadController:
     def __init__(self):

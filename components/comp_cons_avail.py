@@ -41,8 +41,9 @@ class DataTable:
         self.group_mode = "None"
         self.selected_contract_id = None
         self.selected_candidate_id = None
-        self.selected_row = None
+        self.selected_rows = []
         self.is_summary = is_summary
+        self.summary_container = ui.row().classes( 'q-table__top q-tr bg-grey-2 text-bold' )
         self.all_columns = list(self.df.columns)
         self.hidden_columns = hidden_columns or []
         self.month_cols = [c for c in self.all_columns if c.startswith('202')]
@@ -55,28 +56,19 @@ class DataTable:
      
 
     # --- Update of dataframe ---
+
     def update(self, new_df: pd.DataFrame):
-        self.filtered_df = new_df
-        self.all_columns = list(self.df.columns)
-        self.visible_columns = [c for c in self.all_columns if c not in self.hidden_columns]
-        rows = new_df.to_dict(orient='records')
-        rows = self._format_rows(rows)
+        self.table.update_from_pandas(new_df)
+        self.df = new_df
+        if self.is_summary: 
+            self.add_summary_row() 
+            self.table.rows.insert(0, self.summary_row) # 4. Uppdatera UI igen 
+            self._format_rows(self.table.rows)
+            self.table.update() 
 
-        if self.is_summary:
-            self.add_summary_row()
-            self.summary_row['id'] = 'SUMMARY'
-            rows.insert(0, self.summary_row)
-
-        self.table.columns = [
-            {'name': c, 'label': c, 'field': c, 'sortable': True}
-            for c in self.visible_columns
-        ]
-        self.table.rows = rows
-        self.table.update()
     
     def _format_rows(self, rows):           # --- If it is a perc_table
         """Format only UI rows, never the DataFrame."""
-
         for row in rows:                    # --- For the table
             for col in self.month_cols:
                 val = row[col]
@@ -85,7 +77,6 @@ class DataTable:
                         row[col] = ""
                     elif self.perc_table:
                         row[col] = f"{int(val)}%"
-
                            
         for col in self.month_cols:         # --- for the summary row
             if self.perc_table:
@@ -127,7 +118,7 @@ class DataTable:
 
     def render(self):
         df = self.df.copy()
-        self.filter_container = ui.row()
+        self.filter_container = ui.row().classes("w-full items-center")
         with self.filter_container:
             if self.alloc_table:
                 self.radio = ui.radio(
@@ -135,63 +126,73 @@ class DataTable:
                     value='None',
                     on_change=self.change_radio,
                 ).props('dense').classes("mr-4")
-                delete_button = ui.button(icon = 'delete', color ='red', on_click = self.delete_row)
-                inc_button = ui.button(text = "add 10%", color ='grey', on_click = self.inc_alloc)
-                dec_button = ui.button(text = "sub 10%", color = 'grey', on_click = self.dec_alloc)
-            ui.space()
-            self.add_filter()
+            if self.perc_table:
+                delete_button = ui.button(icon = 'delete', text = "Delete", color ='red', on_click = self.delete_row)
+                inc_button = ui.button(text = "add 10%", icon="arrow_upward", color ='grey', on_click = self.inc_alloc)
+                dec_button = ui.button(text = "sub 10%", icon="arrow_downward",  color = 'grey', on_click = self.dec_alloc)
+                ui.space()
+                add_button = ui.button(text = "Add allocation", icon="add", color = 'blue', on_click = self.add_alloc)
+                self.add_filter()
+            else:
+                ui.space()
+                self.add_filter()
 
         rows = df.to_dict(orient='records')
         rows = self._format_rows(rows)
-
-        self.summary_row['id'] = 'SUMMARY'
         rows.insert(0, self.summary_row)
-        columns = [{'name': 'selection', 'label': '', 'field': 'selection', 'sortable': False}] + [
-            {'name': c, 'label': c, 'field': c, 'sortable': True}
-            for c in self.visible_columns
-        ]
-        print("innan table")
+        if self.perc_table:
+            selection_mode = 'multiple'
+            print("perc table - multiple selection")
+        elif self.is_summary ==  True and not self.alloc_table:
+            selection_mode = 'multiple'
+        else:
+            selection_mode = 'none'
+
+        if selection_mode == 'multiple':
+            columns = [{'name': 'selection', 'label': '', 'field': 'selection', 'sortable': False}] + [
+                {'name': c, 'label': c, 'field': c, 'sortable': True}
+                for c in self.visible_columns
+            ]
+        else:
+            columns = [
+                {'name': c, 'label': c, 'field': c, 'sortable': True}
+                for c in self.visible_columns
+            ]
+
         with ui.card().classes('w-full') as container:
             container.style('height: 700px;')  # eller 1000px, vad du vill
 
             self.table = ui.table(
                 columns=columns,
                 rows=rows,
-                row_key="id",
-                on_select=lambda e: self.update_selected_row(e),
-                selection = "multiple",
+                row_key= "id", 
+                selection=selection_mode,
                 pagination={"rowsPerPage": 20}
             ).props('dense').classes('w-full no-wrap sticky-header')
         self.table.style('height: 100%; overflow-y: auto; overflow-x: auto;')
+        self.table.on('selection', self.update_selected_row)
 
-        self.table.add_slot('header-selection', r'''
-            <q-th auto-width>
-                <q-checkbox v-model="props.selected" />
-            </q-th>
-        ''')
+        if selection_mode == 'multiple':
+            self.table.add_slot('header-selection', r'''
+                <q-th auto-width>
+                    <q-checkbox v-model="props.selected" />
+                </q-th>
+            ''')
 
-        self.table.add_slot('body', r'''
-            <q-tr :props="props"
-                :class="props.row.contract_id === 'SUMMARY'   ? 'bg-red-100 text-red-900' :
-                        props.row.contract_id === '1' ? 'bg-orange-100 text-orange-900' :
-                        'hover:bg-gray-50'">
-                <q-td auto-width>
-                    <q-checkbox v-model="props.selected" dense />
-                </q-td>
-                <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                    {{ props.row[col.field] }}
-                </q-td>
-            </q-tr>
-                 
-        ''')
-        if self.alloc_table:
-            self.add_allocation_buttons()
-            
-    def add_allocation_buttons(self):
-        pass
-
-    def _changeValue(self):
-        print("kajshdkajshd")
+            self.table.add_slot('body', r'''
+                <q-tr :props="props"
+                    :class="props.row.contract_id === ''   ? 'bg-red-100 text-red-900' :
+                            props.row.contract_id === '1' ? 'bg-orange-100 text-orange-900' :
+                            'hover:bg-gray-50'">
+                    <q-td auto-width>
+                        <q-checkbox v-model="props.selected" dense />
+                    </q-td>
+                    <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                        {{ props.row[col.field] }}
+                    </q-td>
+                </q-tr>
+                    
+            ''')
         
 
     def add_filter(self, fields_to_search=None):
@@ -213,7 +214,6 @@ class DataTable:
     def _apply_filter(self, term):
         term = term.lower()
         filtered = []
-
         for row in self.df.to_dict(orient='records'):
             if any(term in str(value).lower() for value in row.values()):                
                 filtered.append(row)
@@ -243,46 +243,49 @@ class DataTable:
 
     def add_summary_row(self):
         summary = {}
-        if self.filtered_df.empty: 
+        if self.df.empty: 
             for col in self.df.columns: 
                 summary[col] = '' 
-            summary['contract_id'] = 'SUMMARY' 
             self.summary_row = summary 
             return
 
-        for col in self.filtered_df.columns:
-            if is_numeric_dtype(self.filtered_df[col].dtype):
-                summary[col] = self.filtered_df[col].sum()   # eller mean(), median(), etc.
+        for col in self.df.columns:
+            if is_numeric_dtype(self.df[col].dtype):
+                summary[col] = self.df[col].sum()   # eller mean(), median(), etc.
             else:
                 summary[col] = ''
-        summary["contract_id"] = "SUMMARY"
+        # summary["contract_id"] = "SUMMARY"
         self.summary_row = summary
 
     def update_selected_row(self, e):
-        print("i update select")
-        self.selected_row = e.selection[0]
-        print("selected: ", e)       
+        selected_rows = self.table.selected
+        print("Selected rows:", selected_rows)
+        self.selected_rows = [ 
+            { "contract_id": row["contract_id"], "candidate_id": row["candidate_id"] } 
+            for row in selected_rows]
+        print("Rader valda:", self.selected_rows)
+        
 
     async def delete_row (self):
-        
-        print("ska deleta row:")
-        contract_id = self.selected_row['contract_id'] 
-        candidate_id = self.selected_row['candidate_id'] 
-        await self.delete_allocation (contract_id, candidate_id)
+        print("ska deleta rows:", self.selected_rows)
+        await self.delete_allocation (self.selected_rows)
     
     async def inc_alloc(self):
         print("ska öka row:")
-
         contract_id = self.selected_row['contract_id'] 
         candidate_id = self.selected_row['candidate_id']
-        await self.change_alloc(contract_id, candidate_id, up_alloc = True)
+        await self.change_alloc(self.selected_rows, up_alloc = True)
 
     async def dec_alloc (self):
         print("ska minska row:")
-
         contract_id = self.selected_row['contract_id'] 
         candidate_id = self.selected_row['candidate_id']
-        await self.change_alloc(contract_id, candidate_id, up_alloc = False)
+        await self.change_alloc(self.selected_rows, up_alloc = False)
+    
+    async def add_alloc (self):
+        print("ska lägga till alloc:")
+        await self.add_allocation()
+
 
 #--- WORKING HOURS DF FUNCTION ---
 
