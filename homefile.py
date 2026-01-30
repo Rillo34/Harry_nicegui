@@ -14,4 +14,4 @@ from niceGUI.pages.page_datavalidation import datavalidation_page
 
 
 # Start app
-ui.run(port=8007, reload=False)
+ui.run(port=8007, reload=True)

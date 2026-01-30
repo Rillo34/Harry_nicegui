@@ -1,52 +1,63 @@
 import pandas as pd
-from pandas.api.types import is_bool_dtype, is_numeric_dtype
-
 from nicegui import ui
 
-df = pd.DataFrame(data={
-    'col1': [x for x in range(4)],
-    'col2': ['This', 'column', 'contains', 'strings.'],
-    'col3': [x / 4 for x in range(4)],
-    'col4': [True, False, True, False],
+# Skapa en exempel-DF med decimaltal
+df = pd.DataFrame({
+    'kontrakt': ['Projekt A', 'Projekt B'],
+    'jan': [0.5, 1.0],  # 50% och 100%
+    'feb': [0.1, 0.8],
 })
 
-def update(*, df: pd.DataFrame, r: int, c: int, value):
-    df.iat[r, c] = value
-    ui.notify(f'Set ({r}, {c}) to {value}')
+# Konvertera DF till list-format för ui.table
+rows = df.to_dict('records')
+manader = ['jan', 'feb']
 
-def delete_row(r):
-    df.drop(index=r, inplace=True)
-    ui.notify(f'Deleted row {r}')
-    ui.refresh()  # kräver NiceGUI 1.4+
+columns = [
+    {'name': 'kontrakt', 'label': 'Kontrakt', 'field': 'kontrakt', 'align': 'left'},
+]
+for m in manader:
+    columns.append({
+        'name': m, 
+        'label': m.capitalize(), 
+        'field': m,
+        # Formatera talet som procent i visningsläget (valfritt, slotten skriver över detta)
+    })
 
-with ui.grid(rows=len(df.index)+1).classes('grid-flow-col'):
-    for c, col in enumerate(df.columns):
-        ui.label(col).classes('font-bold')
+def bulk_update_pct(delta: float):
+    if not table.selected:
+        ui.notify('Välj rader först')
+        return
+    for row in table.selected:
+        for m in manader:
+            row[m] = round(row.get(m, 0) + delta, 2)
+    table.update()
 
-        for r, row in enumerate(df.loc[:, col]):
+with ui.column().classes('w-full q-pa-md'):
+    with ui.row():
+        ui.button('+10%', on_click=lambda: bulk_update_pct(0.1)).props('color=green')
+        ui.button('-10%', on_click=lambda: bulk_update_pct(-0.1)).props('color=red')
 
-            # välj komponent baserat på dtype
-            if is_bool_dtype(df[col].dtype):
-                cls = ui.checkbox
-                extra = {}
-            elif is_numeric_dtype(df[col].dtype):
-                cls = ui.number
-                extra = {"step": 10}
-            else:
-                cls = ui.input
-                extra = {}
+    table = ui.table(columns=columns, rows=rows, selection='multiple', row_key='kontrakt').classes('w-full')
 
-            cls(
-                value=row,
-                on_change=lambda event, r=r, c=c: update(df=df, r=r, c=c, value=event.value),
-                **extra
-            )
+    # Slot för att visa och editera som %
+    for m in manader:
+        table.add_slot(f'body-cell-{m}', f'''
+            <q-td :props="props">
+                {{{{ (props.row.{m} * 100).toFixed(0) }}}} %
+                
+                <q-popup-edit v-model.number="props.row.{m}" v-slot="scope" buttons>
+                    <q-input 
+                        v-model.number="scope.value" 
+                        type="number" 
+                        step="0.1" 
+                        prefix="Prop:"
+                        hint="0.1 = 10%"
+                        dense 
+                        autofocus 
+                        @keyup.enter="scope.set" 
+                    />
+                </q-popup-edit>
+            </q-td>
+        ''')
 
-    # Lägg till en extra kolumn med knappar
-    ui.label("Actions").classes("font-bold")
-    for r in range(len(df.index)):
-        with ui.row():
-            ui.button("Delete", color="red", on_click=lambda r=r: delete_row(r))
-            ui.button("Info", on_click=lambda r=r: ui.notify(f"Row {r}: {df.iloc[r].to_dict()}"))
-
-ui.run(port =8002)
+ui.run()

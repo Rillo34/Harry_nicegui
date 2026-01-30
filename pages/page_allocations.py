@@ -15,6 +15,7 @@ async def allocations_page():
     contract_df = pd.DataFrame(contracts)
     allocation_df = pd.DataFrame(allocations)
     allocations_perc_df = pd.DataFrame(allocations_perc)
+    print (f"allocations_perc_df.head(): {allocations_perc_df.head()}")
     workinghours_df = pd.DataFrame(working_hours)
     all_columns = allocation_df.columns.to_list()
     non_month_cols = [c for c in allocation_df.columns if not c.startswith('202')]
@@ -25,13 +26,13 @@ async def allocations_page():
     async def refresh_allocation_tables():
         allocations = await API_client.get_all_allocations()
         allocations_perc = await API_client.get_all_allocations_perc()
-        allocation_df = pd.DataFrame(allocations)
-        allocations_perc_df = pd.DataFrame(allocations_perc)
+        allocation_df = pd.DataFrame(allocations).round(1)
+        allocations_perc_df = pd.DataFrame(allocations_perc).round(1)
         allocation_table.update(allocation_df)
         allocation_perc_table.update(allocations_perc_df)
 
 
-    async def add_allocation():
+    async def add_allocation(payload):
         candidates = await API_client.get_all_candidates()
         print(f"candidates: {candidates}")
 
@@ -46,19 +47,37 @@ async def allocations_page():
         await API_client.delete_allocation(payload)
         await refresh_allocation_tables()
 
-    
-    async def change_alloc(contract_id, candidate_id, up_alloc):
-        if up_alloc:
-            print("UP")
-            await API_client.change_allocation(contract_id, candidate_id, 10)
-        else:
-            print("DOWN")
-            await API_client.change_allocation(contract_id, candidate_id, -10)
-        print(f"Changed allocation for {contract_id} - {candidate_id}")
+    async def change_cell_alloc(row, col, new_value):
+        payload = [ 
+            {"contract_id": row["contract_id"], 
+             "candidate_id": row["candidate_id"], 
+             "month": col, 
+             "new_value": new_value } 
+                ]
+        await API_client.change_cell_alloc(payload)
         await refresh_allocation_tables()
 
+    async def change_alloc(selected_rows, up_alloc):
+        selected_before = allocation_perc_table.table.selected.copy()
+        if up_alloc:
+            print("UP")
+            change = 0.1
+        else:
+            print("DOWN")
+            change = -0.1
+        payload = [ 
+            {"contract_id": row["contract_id"], 
+             "candidate_id": row["candidate_id"], 
+             "change": change, } 
+             for row in selected_rows 
+            ]
+        await API_client.change_allocation(payload)
+        await refresh_allocation_tables()
+        allocation_perc_table.table.selected = selected_before
+        allocation_perc_table.table.update()
 
-    callbacks = { "add_allocation": add_allocation, "delete_allocation": delete_allocation, "change_alloc": change_alloc} 
+
+    callbacks = { "add_allocation": add_allocation, "delete_allocation": delete_allocation, "change_alloc": change_alloc, "change_cell_alloc": change_cell_alloc } 
 
     with ui.column().classes('w-full'):
         with ui.tabs().classes('w-full') as tabs:

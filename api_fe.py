@@ -4,7 +4,7 @@ import requests
 import httpx
 from nicegui import events, ui
 from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
-from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationRequest, NewSummary, JobStatusUpdateRequest
+from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationRequest, NewSummary, JobStatusUpdateRequest, ContractAllocationMonthRequest
 
 
 class APIController:
@@ -88,13 +88,28 @@ class APIController:
         print("Payload for delete_allocation:", payload)
         return await self._request("POST", "/delete-allocation", json=payload)
     
-    async def change_allocation(self, contract_id, candidate_id, change):
-        payload = ContractAllocationRequest(
-            contract_id = contract_id,
-            candidate_id = candidate_id,
-            change = change
-        )
-        return await self._request("PATCH", "/change-allocation", json=payload.dict())
+    async def change_allocation(self, change_list):
+        payload = [
+            ContractAllocationRequest(
+                contract_id=item["contract_id"],
+                candidate_id=item["candidate_id"],
+                change=item["change"]
+            ).dict()
+            for item in change_list
+        ]
+        return await self._request("PATCH", "/change-allocation", json=payload)
+    
+    async def change_cell_alloc(self, change_list):
+        payload = [
+            ContractAllocationMonthRequest(
+                contract_id=item["contract_id"],
+                candidate_id=item["candidate_id"],
+                month=item["month"],
+                new_value=item["new_value"]
+            ).dict()
+            for item in change_list
+        ]
+        return await self._request("PATCH", "/change-cell-allocation", json=payload)
 
 
     # -----------------------------
