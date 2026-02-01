@@ -4,8 +4,8 @@ import requests
 import httpx
 from nicegui import events, ui
 from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
-from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationRequest, NewSummary, JobStatusUpdateRequest, ContractAllocationMonthRequest
-
+from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationChangeRequest, NewSummary, JobStatusUpdateRequest, ContractAllocationMonthRequest
+from backend.models import ContractAllocationRequest
 
 class APIController:
     BASE = "http://127.0.0.1:8080"
@@ -68,15 +68,14 @@ class APIController:
     async def get_all_allocations(self):
         return await self._request("GET", "/get-allocations-table")
     
-    async def get_all_allocations_perc(self):
-        return await self._request("GET", "/get-allocations-table-perc")
+    async def get_allocations_perc_and_hours(self):
+        return await self._request("GET", "/get-allocations-table-perc-and-hours")
     
     async def get_working_hours(self):
         return await self._request("GET", "/get-workinghour-table")
     
     async def delete_allocation(self, allocation_list):
-        # allocation_list är redan en lista av dicts med contract_id och candidate_id
-        print("API delete_allocation, allocation_list:", allocation_list)
+        print("API   delete_allocation, allocation_list:", allocation_list)
         payload = [
             ContractAllocationRequest(
                 contract_id=item["contract_id"],
@@ -90,7 +89,7 @@ class APIController:
     
     async def change_allocation(self, change_list):
         payload = [
-            ContractAllocationRequest(
+            ContractAllocationChangeRequest(
                 contract_id=item["contract_id"],
                 candidate_id=item["candidate_id"],
                 change=item["change"]
@@ -111,6 +110,31 @@ class APIController:
         ]
         return await self._request("PATCH", "/change-cell-allocation", json=payload)
 
+    async def add_allocation_to_contract(self, allocation_list):
+        print("API add_allocation_to_contract_allocation, allocation_list:", allocation_list)
+
+        payload = [
+            ContractAllocationRequest(
+                contract_id=allocation_list["contract_id"],
+                candidate_id=candidate_id,
+                allocation_percent=allocation_list["allocation_percent"]
+            ).dict()
+            for candidate_id in allocation_list["candidate_ids"]
+        ]
+
+        print("Payload for add_allocation_to_contract_allocation:", payload)
+        return await self._request("POST", "/add-allocation", json=payload)
+
+    # -----------------------------
+    # AVAILABILITY
+    # -----------------------------
+
+    async def get_availability(self, contract_id):
+        return await self._request(
+            "GET",
+            "/availability-against-job",
+            params={"contract_id": contract_id}
+        )
 
     # -----------------------------
     # FILE UPLOAD / EVALUATION

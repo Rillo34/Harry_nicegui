@@ -36,7 +36,7 @@ class JobList:
         self.valid_states = ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"]
 
         self.preferred_column_order = [
-            'job_id', 'customer', 'title', 'contact_person', 'start_date', 'duration', 'due_date',
+            'job_id', 'customer', 'title', 'contact_person', 'start_date', 'end_date', 'job_hours', 'duration', 'due_date',
             'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
         ]
 
@@ -46,6 +46,9 @@ class JobList:
             {"name": "title", "label": "Title", "field": "title", "sortable": True, "style": "max-width: 200px; white-space: normal;", "align": "left"},
             {"name": "contact_person", "label": "Contact Person", "field": "contact_person", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
             {"name": "start_date", "label": "Start Date", "field": "start_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
+            {"name": "end_date", "label": "End Date", "field": "end_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
+            {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+            {"name": "job_hours", "label": "Job Hours", "field": "job_hours", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
             {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
             {"name": "due_date", "label": "Due Date", "field": "due_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
             {"name": "days_left", "label": "Days Left", "field": "days_left", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},

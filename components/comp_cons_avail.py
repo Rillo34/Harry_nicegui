@@ -25,6 +25,19 @@ ui.add_css("""
     border-top: 2px solid #2563eb;
 }
 """)
+ui.add_head_html('''
+    <script>
+        function getColorClass(val) {
+            if (val === null || isNaN(val)) return '';
+            if (val <= 0.2) return 'bg-green-100 text-green-800';
+            if (val <= 0.5) return 'bg-yellow-100 text-yellow-800';
+            if (val <= 0.8) return 'bg-orange-100 text-orange-800';
+            return 'bg-red-100 text-red-800';  // > 0.8 → rött
+        }
+    </script>
+''')
+
+
 
 class DataTable:
     def __init__(self, df: pd.DataFrame, title="Table", hidden_columns: List[str] = None, is_summary=False, alloc_table = False, perc_table = False, callbacks = None):
@@ -36,10 +49,11 @@ class DataTable:
         self.perc_table = perc_table
         self.alloc_table = alloc_table
         self.table = None
-        self.add_allocation = callbacks["add_allocation"]
-        self.delete_allocation = callbacks["delete_allocation"]
-        self.change_alloc = callbacks["change_alloc"] 
-        self.change_cell_alloc = callbacks["change_cell_alloc"]
+        callbacks = callbacks or {}
+        self.add_allocation = callbacks.get("add_allocation")
+        self.delete_allocation = callbacks.get("delete_allocation")
+        self.change_alloc = callbacks.get("change_alloc")
+        self.change_cell_alloc = callbacks.get("change_cell_alloc")
         self.group_mode = "None"
         self.enable_buttons = True
         self.selected_rows = []
@@ -52,89 +66,25 @@ class DataTable:
         self.summary_row = {}
         if self.is_summary:
             self.add_summary_row()
-        
         self.render()   
      
 
-    # --- Update of dataframe ---
+    
+
+# -----------------------------
+# RENDER AND UPDATE
+# -----------------------------
 
     def update(self, new_df: pd.DataFrame, group_by = False):
         self.table.update_from_pandas(new_df)
         if not group_by:
             self.df_latest = new_df
-        if self.is_summary: 
-            self.add_summary_row() 
-            self.table.rows.insert(0, self.summary_row) # 4. Uppdatera UI igen 
+        
+        if self.is_summary:
+            self.add_summary_row()
+            self.table.rows.insert(0, self.summary_row) # 4. Uppdatera UI igen
             self._format_rows(self.table.rows)
             self.table.update() 
-
-    
-    def _format_rows(self, rows):           # --- If it is a perc_table
-        """Format only UI rows, never the DataFrame."""
-        for row in rows:                    # --- For the table
-            for col in self.month_cols:
-                val = row[col]
-                if isinstance(val, (int, float)):
-                    if val == 0:
-                        row[col] = ""
-                    # elif self.perc_table:
-                    #     row[col] = f"{int(val)}%"
-                           
-        for col in self.month_cols:         # --- for the summary row
-            if self.perc_table:
-                val = self.summary_row.get(col) 
-                # if isinstance(val, (int, float)): 
-                #     self.summary_row[col] = f"{int(val)}%" 
-        return rows
-    
-    def change_visibility_of_buttons(self, visible: bool):
-        self.delete_button.visible = visible
-        self.inc_button.visible = visible
-        self.dec_button.visible = visible
-        self.add_button.visible = visible
-
-    def change_radio(self, e): 
-        self.group_mode = e.value 
-        print ("group mode = ", self.group_mode)
-        if self.group_mode == "None": 
-            df = self.df_latest.copy()
-            self.enable_buttons
-        elif self.group_mode == "Candidate":
-            self.enable_buttons = False
-            print("it is candidate")
-            df = (
-                self.df_latest.groupby("candidate_id")
-                .agg(
-                    {
-                        "contract_id": lambda x: ", ".join(sorted(set(x))),
-                        **{m: "sum" for m in self.month_cols},
-                    }
-                )
-                .reset_index()
-            )
-        elif self.group_mode == "Group by contract":
-            print("it is contract")
-            self.enable_buttons = False
-            df = (
-                self.df_latest.groupby("contract_id")
-                .agg(
-                    {
-                        "candidate_id": lambda x: ", ".join(sorted(set(x))),
-                        **{m: "sum" for m in self.month_cols},
-                    }
-                )
-                .reset_index()
-            )
-        df = df.round(1)
-        self.update(df, group_by=True)
-
-    def _on_cell_edit(self, e): 
-        print("Cell edit event args:", e.args)
-        data = e.args[0] 
-        ui.notify(f"Saving value {data['value']} for contract {data['contract_id']}, candidate {data['candidate_id']}, month {data['month']}")
-
-    # ui.run_async(self._save_cell(contract_id, candidate_id, month, value))
-
 
     def render(self):
         df = self.df.copy()
@@ -210,8 +160,73 @@ class DataTable:
                     {{{{ props.row['{col}'] }}}}
                 </q-td>
             """)
+        
         self.table.on("cell-click", lambda e: self.open_edit_dialog(e.args["row"], e.args["col"]))
         
+# -----------------------------
+# FILTER AND GROUPING
+# -----------------------------
+
+    def _format_rows(self, rows):           # --- If it is a perc_table
+        """Format only UI rows, never the DataFrame."""
+        for row in rows:                    # --- For the table
+            for col in self.month_cols:
+                val = row[col]
+                if isinstance(val, (int, float)):
+                    if val == 0:
+                        row[col] = ""
+                    # elif self.perc_table:
+                    #     row[col] = f"{int(val)}%"
+                           
+        for col in self.month_cols:         # --- for the summary row
+            if self.perc_table:
+                val = self.summary_row.get(col) 
+                # if isinstance(val, (int, float)): 
+                #     self.summary_row[col] = f"{int(val)}%" 
+        return rows
+    
+    
+    def change_radio(self, e): 
+        self.group_mode = e.value 
+        print ("group mode = ", self.group_mode)
+        if self.group_mode == "None": 
+            df = self.df_latest.copy()
+            self.enable_buttons
+        elif self.group_mode == "Candidate":
+            self.enable_buttons = False
+            print("it is candidate")
+            df = (
+                self.df_latest.groupby("candidate_id")
+                .agg(
+                    {
+                        "contract_id": lambda x: ", ".join(sorted(set(x))),
+                        **{m: "sum" for m in self.month_cols},
+                    }
+                )
+                .reset_index()
+            )
+        elif self.group_mode == "Group by contract":
+            print("it is contract")
+            self.enable_buttons = False
+            df = (
+                self.df_latest.groupby("contract_id")
+                .agg(
+                    {
+                        "candidate_id": lambda x: ", ".join(sorted(set(x))),
+                        **{m: "sum" for m in self.month_cols},
+                    }
+                )
+                .reset_index()
+            )
+        df["Total"] = df[self.month_cols].sum(axis=1)
+        df = df.round(1)
+        self.update(df, group_by=True)
+
+    def _on_cell_edit(self, e): 
+        print("Cell edit event args:", e.args)
+        data = e.args[0] 
+        ui.notify(f"Saving value {data['value']} for contract {data['contract_id']}, candidate {data['candidate_id']}, month {data['month']}")
+
 
     def open_edit_dialog(self, row, col): 
         print(f"Opening edit dialog for row: {row}, column: {col}")
@@ -231,7 +246,8 @@ class DataTable:
                 min=0,
                 max=1
             )
-            ui.button("Spara", on_click=save_edit)
+            ui.button("Save", on_click=save_edit)
+            ui.button("Cancel", on_click=edit_dialog.close)
         self.current_row = row
         self.current_col = col
         self.edit_value.value = row[col]
@@ -254,6 +270,7 @@ class DataTable:
                     on_change=lambda e: self._update_columns(e.value)
                 ).props('dense').classes("w-64 text-sm")
 
+
     def _apply_filter(self, term):
         term = term.lower()
         filtered = []
@@ -268,6 +285,7 @@ class DataTable:
         filtered = self._format_rows(filtered)
         self.table.update()
 
+
     def _update_columns(self, hidden_columns: List[str]):
         """Hide selected columns and refresh the table."""
         print("Hiding columns:", hidden_columns)
@@ -277,12 +295,15 @@ class DataTable:
         {'name': c, 'label': c, 'field': c, 'sortable': True}
         for c in self.visible_columns
         ]
-
         self.table.columns = new_columns
         self.table.update()
         print(f"Visible columns updated: {self.visible_columns}")
         print(f"Hidden columns: {self.hidden_columns}")
 
+        
+# -----------------------------
+# HELPER FUNCTIONS
+# -----------------------------
 
     def add_summary_row(self):
         summary = {}
@@ -308,80 +329,11 @@ class DataTable:
             self.selected_rows = [ row["contract_id"] for row in selected_rows ]
         print("Rader valda:", self.selected_rows)
 
-
-    def add_filter(self, fields_to_search=None):
-        with self.filter_container:
-            ui.label("Filter:")
-            ui.input(
-                placeholder="Search...",
-                on_change=lambda e: self._apply_filter(e.value)
-            ).props('dense').classes("w-64 text-sm")
-            # print("hidden columns:", self.hidden_columns)
-            ui.select(
-                    options=list(self.all_columns),
-                    value =  self.hidden_columns,
-                    label="Hide/select Columns",
-                    multiple=True,
-                    on_change=lambda e: self._update_columns(e.value)
-                ).props('dense').classes("w-64 text-sm")
-
-    def _apply_filter(self, term):
-        term = term.lower()
-        filtered = []
-        for row in self.df.to_dict(orient='records'):
-            if any(term in str(value).lower() for value in row.values()):                
-                filtered.append(row)
-        self.filtered_df = pd.DataFrame(filtered)
-        if self.is_summary:
-            self.add_summary_row()
-        filtered.insert(0, self.summary_row)
-        self.table.rows = filtered
-        filtered = self._format_rows(filtered)
-        self.table.update()
-    
-    def _update_columns(self, hidden_columns: List[str]):
-        """Hide selected columns and refresh the table."""
-        print("Hiding columns:", hidden_columns)
-        self.hidden_columns = hidden_columns
-        self.visible_columns = [col for col in self.all_columns if col not in hidden_columns]
-        new_columns = [
-        {'name': c, 'label': c, 'field': c, 'sortable': True}
-        for c in self.visible_columns 
-        ]
-
-        self.table.columns = new_columns
-        self.table.update()
-        print(f"Visible columns updated: {self.visible_columns}")
-        print(f"Hidden columns: {self.hidden_columns}")
-
-
-    def add_summary_row(self):
-        summary = {}
-        if self.df_latest.empty: 
-            for col in self.df_latest.columns: 
-                summary[col] = '' 
-            self.summary_row = summary 
-            return
-
-        for col in self.df_latest.columns:
-            if is_numeric_dtype(self.df_latest[col].dtype):
-                summary[col] = self.df_latest[col].sum().round(1)   # eller mean(), median(), etc.
-            else:
-                summary[col] = ''
-        # summary["contract_id"] = "SUMMARY"
-        self.summary_row = summary
-
-    def update_selected_row(self, e):
-        selected_rows = self.table.selected
-        print("Selected rows:", selected_rows)
-        if self.perc_table:
-            self.selected_rows = [ 
-                { "contract_id": row["contract_id"], "candidate_id": row["candidate_id"] } 
-                for row in selected_rows ]
-        else:
-            self.selected_rows = [ row["contract_id"] for row in selected_rows ]
-        print("Rader valda:", self.selected_rows)
         
+# -----------------------------
+# API CALLS
+# -----------------------------
+
 
     async def delete_row (self):
         print("ska deleta rows:", self.selected_rows)
@@ -398,7 +350,6 @@ class DataTable:
     async def dec_alloc (self):
         print("ska minska row")
         await self.change_alloc(self.selected_rows, up_alloc = False)
-
     
     def add_alloc(self):
         print("ska lägga till alloc:")
@@ -450,8 +401,7 @@ class DataTable:
                 with ui.row():
                     ui.button("Cancel", on_click=dialog.close)
                     async def _on_save(e):
-                        # Kör bara koroutinen – NiceGUI hanterar await automatiskt i bakgrunden
-                        await self.add_allocation(
+                        await self.add_allocation(  # skicka payload till funktionen
                             {
                                 "contract_id": contract_select.value,
                                 "candidate_ids": candidate_select.value,
@@ -463,9 +413,5 @@ class DataTable:
                     ui.button("Save", on_click=_on_save).classes("bg-blue-500 text-white")
         dialog.open()
            
-
-
-#--- WORKING HOURS DF FUNCTION ---
-
 
 
