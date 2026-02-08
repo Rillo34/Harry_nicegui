@@ -19,7 +19,7 @@ async def allocations_page():
 
     drawer = LeftDrawer() 
 
-    contracts = await API_client.get_all_contracts()
+    contracts = await API_client.get_contracts_table()
     contract_df = pd.DataFrame(contracts)
 
     working_hours = await API_client.get_working_hours()
@@ -82,7 +82,7 @@ async def allocations_page():
         await refresh_allocation_tables()
 
     async def change_alloc(selected_rows, up_alloc):
-        selected_before = allocation_perc_table.table.selected.copy()
+        selected_before = allocations_perc_table.table.selected.copy()
         if up_alloc:
             print("UP")
             change = 0.1

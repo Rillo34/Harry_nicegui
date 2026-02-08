@@ -62,7 +62,7 @@ class APIController:
     # CONTRACTS AND ALLOCATIONS
     # -----------------------------
 
-    async def get_all_contracts(self):
+    async def get_contracts_table(self):
         return await self._request("GET", "/get-contracts-table")
 
     async def get_all_allocations(self):
@@ -135,6 +135,13 @@ class APIController:
             "/availability-against-job",
             params={"contract_id": contract_id}
         )
+
+    async def get_availability_job_contract(self, is_contract, contract_id, candidate_ids):
+        payload= { 
+            "is_contract": is_contract,
+            "contract_id": contract_id, 
+            "candidate_ids": candidate_ids } 
+        return await self._request( "POST", "/availability-against-job-or-contract", json=payload)
 
     # -----------------------------
     # FILE UPLOAD / EVALUATION

@@ -554,10 +554,10 @@ def get_new_dummy_data() -> List[CandidateResultLong]:
         )
     ]
 
-@ui.page('/')
-def main_page():
-    initial_candidates = get_initial_data()
-    table = CandidateTable(candidates=initial_candidates)
+# @ui.page('/')
+# def main_page():
+#     initial_candidates = get_initial_data()
+#     table = CandidateTable(candidates=initial_candidates)
     # input("get new candidates")
     # new_candidates =get_new_dummy_data()
     # table.update(new_candidates)

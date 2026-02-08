@@ -61,3 +61,23 @@ with ui.column().classes('w-full q-pa-md'):
         ''')
 
 ui.run()
+
+
+self.table.add_slot('body', r'''
+        <template v-slot:body="props">
+            <q-tr :props="props"
+                :class="props.row.contract_id === ''   ? 'bg-red-100 text-red-900' :
+                        props.row.contract_id === '1' ? 'bg-orange-100 text-orange-900' :
+                        'hover:bg-gray-50'">
+
+                <q-td auto-width>
+                    <q-checkbox v-model="props.selected" dense />
+                </q-td>
+
+                <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                    {{ props.row[col.field] }}
+                </q-td>
+
+            </q-tr>
+        </template>
+        ''')
