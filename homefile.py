@@ -2,7 +2,7 @@ from nicegui import ui
 
 # Pages
 from niceGUI.pages.page_home import home_page
-from niceGUI.pages.page_candidatejobs import candidate_jobs_page
+# from niceGUI.pages.page_candidatejobs import candidate_jobs_page
 from niceGUI.pages.page_jobs import jobs_page
 from niceGUI.pages.page_allocations import allocations_page
 from niceGUI.pages.page_datavalidation import datavalidation_page
@@ -15,4 +15,4 @@ from niceGUI.pages.page_availability import availability_page
 
 
 # Start app
-ui.run(port=8007, reload=True)
+ui.run(port=8003, reload=True)

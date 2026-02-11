@@ -57,6 +57,9 @@ class APIController:
             status=status
         )
         return await self._request("POST", "/update-job-status", json=payload.dict())
+
+    async def get_jobs_from_directory(self):
+        return await self._request("GET", "/get-new-jobs-from-directory", timeout=60)
     
     # -----------------------------
     # CONTRACTS AND ALLOCATIONS

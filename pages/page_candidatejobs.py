@@ -1,7 +1,8 @@
 from nicegui import ui
 from niceGUI.components.comp_left_drawer import LeftDrawer
 from niceGUI.components.comp_joblist import JobList
-from niceGUI.components.comp_candidatejobs_table import CandidateJobsTable
+# from niceGUI.components.comp_candidatejobs_table import CandidateJobsTable
+from niceGUI.dev.comp_candidatejobs_table_dev import CandidateJobsTable
 from backend.models import CandidateResultLong
 from niceGUI.app_state import API_client, ui_controller
 from datetime import date
@@ -80,4 +81,5 @@ async def candidate_jobs_page():
     print("In candidatejobs_page")
     ui.label("Candidate Jobs Page - Under Construction")
     candidates = get_test_data()
-    candidate_job_table = CandidateJobsTable(candidates)
+    candidate_job_table = CandidateJobsTable(API_client = API_client, candidates=candidates)
+    # candidate_job_table = CandidateJobsTable(API_client = API_client, candidates=candidates)
