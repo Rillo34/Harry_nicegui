@@ -20,7 +20,16 @@ class CandidateJobsTable():
         self.fictive_start_date = date(2025, 10, 1)
         self.api_client = API_client
         self.controller = API_client.controller
-        self.table = ui.table(columns=[], rows=[])
+        # self.table = ui.table(columns=[], rows=[])
+        self.req_changed = False
+        self.requirements = [
+            {
+                "reqname": r.reqname,
+                "ismusthave": r.ismusthave,
+                "source": r.source,
+            }
+            for r in candidates[0].requirements
+        ]
         self._process_candidates(candidates)
         self._build_ui()
 
@@ -31,7 +40,6 @@ class CandidateJobsTable():
     def _process_candidates(self, candidates):
         self.filter_section_expansion = None
         # starta async init   
-        print("candidates: ", candidates)
         self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in candidates}
         self.candidates_list = []
         for cand in self.candidates_map.values():
@@ -52,7 +60,7 @@ class CandidateJobsTable():
 
         priority_fields = ["candidate_id", "name", "combined_score"]
         other_fields = [f for f in CandidateResultLong.__fields__ if f not in priority_fields and f != "requirements"]
-        excluded_fields = ["education", "summary"]
+        excluded_fields = ["education"]
         ordered_fields = [f for f in priority_fields + other_fields if f not in excluded_fields]
         ordered_fields.append("job_availability")
 
@@ -110,8 +118,7 @@ class CandidateJobsTable():
         )
     
     
-        
-
+    
     def _build_ui(self):
         with ui.row().classes('items-center w-full justify-between'):
             ui.label('Candidate Table').classes('text-1xl font-bold p-4')
@@ -412,8 +419,9 @@ class CandidateJobsTable():
                             ui.button('Re-evaluate', icon='send')
                             .classes('bg-blue-500 text-white')
                             .on('click', lambda e: self.re_evaluate())
-                            .props('enabled')
                         )
+                        Reeval_button.bind_enabled_from(self, 'req_changed')
+
 
                         # Rad 2: Search + Select på samma rad
                         with ui.row().classes('w-full gap-2 flex-nowrap'):
@@ -429,7 +437,7 @@ class CandidateJobsTable():
                                 on_change=lambda e: self._update_columns(e.value)
                             ).classes('w-1/2')
                         
-             
+        print("filters:\n", self.filters)     
         self.apply_filters()
     
     async def re_evaluate(self, shortlist_size: int = 3):
@@ -444,7 +452,14 @@ class CandidateJobsTable():
     def _add_requirement_chip(self, req_name: str):
         print("in rebuild", req_name)
         self.musthave_req_names.append(req_name)
+        new_req = {
+                "reqname": req_name,
+                "ismusthave": True,
+                "source": "USER",
+            }
+        self.requirements.append(new_req)        
         self._rebuild_filters()
+        print("reuirements:\n", self.requirements)
         self.apply_filters()
 
     def _toggle_req(self, req_name: str):
@@ -456,7 +471,11 @@ class CandidateJobsTable():
         else:
             self.musthave_req_names.append(req_name)
             self.desirable_req_names.remove(req_name)
-
+        for req in self.requirements:
+            if req["reqname"] == req_name:
+                req["ismusthave"] = not req["ismusthave"]
+                
+        print("reuirements:\n", self.requirements)
         self._rebuild_filters()
         self.apply_filters()
 
@@ -466,16 +485,21 @@ class CandidateJobsTable():
             self.filters.remove(req_name)
         else:
             self.filters.append(req_name)
+        # 
         self._rebuild_filters()
         self.apply_filters()
 
     def _remove_filter(self, req_name: str):
-        """Toggle a requirement filter and update chip color."""
-        print("in remove")
-        self.musthave_req_names.remove(req_name)
+        if req_name in self.musthave_req_names:
+            self.musthave_req_names.remove(req_name)
+        if req_name in self.desirable_req_names:
+            self.desirable_req_names.remove(req_name)
+        self.requirements = [
+            r for r in self.requirements
+            if r["reqname"] != req_name
+        ]
         self._rebuild_filters()
         self.apply_filters()
-
 
     def _update_search(self, value: str):
         self.search_term = value.lower()
@@ -505,6 +529,7 @@ class CandidateJobsTable():
         
         # print(f"Filtered rows: {[cand['name'] for cand in filtered_rows]}")
         self.table.rows = filtered_rows
+        # print(self.table.rows)
         self.table.update()
 
 def get_initial_data() -> List[CandidateResultLong]:
@@ -608,9 +633,9 @@ def get_initial_data() -> List[CandidateResultLong]:
     return [CandidateResultLong(**cand) for cand in fake_candidates] 
 
 
-@ui.page('/')
-def main_page():
-    initial_candidates = get_initial_data()
+# @ui.page('/')
+# def main_page():
+#     initial_candidates = get_initial_data()
 #     the_candidates = [CandidateResultLong(**cand) for cand in initial_candidates]
 #     table = CandidateJobsTable(candidates=the_candidates)
 #     # input("get new candidates")

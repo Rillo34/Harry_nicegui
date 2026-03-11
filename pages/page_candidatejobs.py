@@ -1,76 +1,73 @@
 from nicegui import ui
 from niceGUI.components.comp_left_drawer import LeftDrawer
-from niceGUI.components.comp_joblist import JobList
 # from niceGUI.components.comp_candidatejobs_table import CandidateJobsTable
 from niceGUI.dev.comp_candidatejobs_table_dev import CandidateJobsTable
 from backend.models import CandidateResultLong
 from niceGUI.app_state import API_client, ui_controller
 from datetime import date
 
+import json
+from backend.models import CandidateResultLong, RequirementResult
+
 def get_test_data():
+    raw_json = """
+    [
+        {
+            "candidate_id": "69_VM",
+            "name": "Raz Domb",
+            "assignment": "Data Engineering Tech Lead",
+            "years_exp": "2011-Present",
+            "location": "Prague, Czech Republic",
+            "education": "Industrial engineering majoring in information systems",
+            "internal": false,
+            "available_from": null,
+            "combined_score": 0.62,
+            "summary": "The candidate has extensive experience...",
+            "requirements": [
+                {
+                    "reqname": "CFO or senior financial leadership",
+                    "status": "NO",
+                    "ismusthave": true,
+                    "source": "JD"
+                },
+                 {
+                    "reqname": "aksjhdakshdg",
+                    "status": "MAYBE",
+                    "ismusthave": true,
+                    "source": "JD"
+                },
+                 {
+                    "reqname": "C leadership",
+                    "status": "YES",
+                    "ismusthave": false,
+                    "source": "JD"
+                }
+            ],
+            "availability": null,
+            "status": null
+        }
+    ]
+    """
+
+    # 🔥 JSON → Python (null → None, true → True, false → False)
+    data = json.loads(raw_json)
+
+    # 🔥 Konvertera till dina Pydantic‑modeller
     candidates = [
-    CandidateResultLong(**{
-        "candidate_id": "C-10231",
-        "name": "Anna Lindström",
-        "assignment": "Data Engineer – Retail Analytics Platform",
-        "years_exp": "8",
-        "location": "Stockholm",
-        "education": "MSc Computer Science",
-        "internal": False,
-        "available_from": date(2026, 3, 1),
-        "available_in": "3w",
-        "combined_score": 0.87,
-        "summary": "Experienced data engineer with strong background in cloud-native data pipelines.",
-        "requirements": [
-            {"reqname": "Python", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Azure Data Factory", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Databricks", "status": "MAYBE", "ismusthave": False, "source": "JD"}
-        ],
-        "availability": "3w",
-        "status": "Available"
-    }),
-    CandidateResultLong(**{
-        "candidate_id": "C-20488",
-        "name": "Johan Ek",
-        "assignment": "Fullstack Developer – Internal Tools",
-        "years_exp": "5",
-        "location": "Göteborg",
-        "education": "BSc Software Engineering",
-        "internal": True,
-        "available_from": date(2026, 2, 20),
-        "available_in": "2w",
-        "combined_score": 0.72,
-        "summary": "Fullstack developer with solid experience in TypeScript, React and backend APIs.",
-        "requirements": [
-            {"reqname": "React", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Node.js", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Docker", "status": "NO", "ismusthave": False, "source": "JD"}
-        ],
-        "availability": "2w",
-        "status": "Internal"
-    }),
-    CandidateResultLong(**{
-        "candidate_id": "C-30912",
-        "name": "Sara Holm",
-        "assignment": "Business Analyst – Finance Transformation",
-        "years_exp": "6",
-        "location": "Malmö",
-        "education": "MSc Industrial Engineering",
-        "internal": False,
-        "available_from": date(2026, 4, 15),
-        "available_in": "9w",
-        "combined_score": 0.61,
-        "summary": "Business analyst with experience in financial processes and ERP transitions.",
-        "requirements": [
-            {"reqname": "Process Mapping", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "SQL", "status": "MAYBE", "ismusthave": False, "source": "JD"},
-            {"reqname": "SAP FI/CO", "status": "NO", "ismusthave": True, "source": "JD"}
-        ],
-        "availability": "9w",
-        "status": "Active"
-    })
-]   
+        CandidateResultLong(
+            **{
+                **c,
+                "requirements": (
+                    [RequirementResult(**r) for r in c["requirements"]]
+                    if c.get("requirements") else None
+                )
+            }
+        )
+        for c in data
+    ]
+
     return candidates
+
 
 
     
@@ -79,7 +76,6 @@ def get_test_data():
 async def candidate_jobs_page():
     drawer = LeftDrawer()
     print("In candidatejobs_page")
-    ui.label("Candidate Jobs Page - Under Construction")
     candidates = get_test_data()
-    candidate_job_table = CandidateJobsTable(API_client = API_client, candidates=candidates)
-    # candidate_job_table = CandidateJobsTable(API_client = API_client, candidates=candidates)
+    candidate_job_table = CandidateJobsTable(API_client, candidates=candidates)
+    # candidate_job_table = CandidateJobsTable(candidates=candidates)

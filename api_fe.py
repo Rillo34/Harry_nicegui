@@ -3,7 +3,7 @@ import json
 import requests
 import httpx
 from nicegui import events, ui
-from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateRequest, ReEvaluateResponse, CandidatesJobResponse
+from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateResponse
 from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationChangeRequest, NewSummary, JobStatusUpdateRequest, ContractAllocationMonthRequest
 from backend.models import ContractAllocationRequest
 
