@@ -14,13 +14,15 @@ from typing import List, Dict
 import asyncio
 from datetime import date
 from niceGUI.api_fe import APIController, UploadController
+import json
 
 class CandidateJobsTable():
-    def __init__(self, API_client, candidates: List[CandidateResultLong]):
+    def __init__(self, candidates: List[CandidateResultLong], callbacks):
         self.fictive_start_date = date(2025, 10, 1)
-        self.api_client = API_client
-        self.controller = API_client.controller
+        # self.controller = API_client.controller
         # self.table = ui.table(columns=[], rows=[])
+        self.on_status_change = callbacks["on_status_change"] 
+        self.status_options = callbacks["status_options"]
         self.req_changed = False
         self.requirements = [
             {
@@ -44,25 +46,28 @@ class CandidateJobsTable():
         self.candidates_list = []
         for cand in self.candidates_map.values():
             cand_copy = cand.copy()
-            cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
-            cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
+            reqs = cand.get('requirements') or []   # <-- säkerhetskontroll
+            cand_copy['musthave'] = [req for req in reqs if req['ismusthave']]
+            cand_copy['desirable'] = [req for req in reqs if not req['ismusthave']]
+            # cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
+            # cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
             cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}"
-            if cand_copy.get('available_from'):
-                days = (cand_copy['available_from'] - self.fictive_start_date).days
-                cand_copy['job_availability'] = f"{days}d"
-            else:
-                cand_copy['job_availability'] = "N/A"
+            # if cand_copy.get('available_from'):
+            #     days = (cand_copy['available_from'] - self.fictive_start_date).days
+            #     cand_copy['job_availability'] = f"{days}d"
+            # else:
+            #     cand_copy['job_availability'] = "N/A"
             self.candidates_list.append(cand_copy)
         
         self.original_candidates_list = self.candidates_list.copy()
         
-        print(f"Job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
+        # print(f"Job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
 
         priority_fields = ["candidate_id", "name", "combined_score"]
         other_fields = [f for f in CandidateResultLong.__fields__ if f not in priority_fields and f != "requirements"]
-        excluded_fields = ["education"]
+        excluded_fields = ["available_from"]
         ordered_fields = [f for f in priority_fields + other_fields if f not in excluded_fields]
-        ordered_fields.append("job_availability")
+        # ordered_fields.append("job_availability")
 
         self.columns = [
             {
@@ -122,7 +127,7 @@ class CandidateJobsTable():
     def _build_ui(self):
         with ui.row().classes('items-center w-full justify-between'):
             ui.label('Candidate Table').classes('text-1xl font-bold p-4')
-            ui.label(f'Job: {self.controller.job_id}, {self.controller.job_description} for {self.controller.customer}').classes('mr-2')
+            # ui.label(f'Job: {self.controller.job_id}, {self.controller.job_description} for {self.controller.customer}').classes('mr-2')
             COMMON = "w-64 text-sm [&_.q-field__label]:text-sm [&_.q-field__label]:font-small [&_.q-field__input]:text-sm [&_.q-field__native]:text-sm"
         
         self.filter_section_expansion = ui.expansion('REQUIREMENTS FILTER', icon='extension').classes('w-full font-bold')
@@ -135,132 +140,234 @@ class CandidateJobsTable():
             pagination={'sortBy': 'combined_score', 'descending': True, 'rowsPerPage': 15}
         ).classes("table-fixed w-full max-w-full") #classes("w-full max-w-[1800px]")
 
+        status_options = self.status_options
+        print("status options: ", status_options)
+        
+        status_json = json.dumps(status_options)
+        print(status_json)
         with self.table:
-            self.table.add_slot('body-cell-combined_score', r'''
-                <q-td :props="props" class="text-center">
-                    <q-badge
-                        :color="
-                            props.row.combined_score >= 90 ? 'blue-2' :
-                            (props.row.combined_score >= 75 ? 'green-2' :
-                            (props.row.combined_score >= 60 ? 'yellow-2' : 'red-2'))
-                        "
-                        class="q-pa-sm text-subtitle2 text-black"
-                        rounded
-                    >
-                        {{ props.row.combined_score }} %
-                    </q-badge>
-                </q-td>
-                ''')
-            self.table.add_slot('body-cell-availability', r'''
-                <q-td :props="props" class="text-center">
-                    <q-badge
-                        :color="
-                            props.row.availability === 'EXCELLENT' ? 'blue' :
-                            props.row.availability === 'GOOD' ? 'green' :
-                            props.row.availability === 'OK' ? 'orange' :
-                            'red'
-                        "
-                        class="shadow-2"
-                        style="
-                            font-size: 14px;
-                            padding: 4px 8px;
-                            line-height: 1;
-                            min-width: 60px;
-                            justify-content: center;
-                        "
-                        rounded
-                    >
-                        {{ props.row.availability }}
-                    </q-badge>
-                </q-td>
-                ''')
-            self.table.add_slot(
-                "body-cell-musthave",
-                r'''
-                <q-td :props="props">
-                    <div class="flex flex-wrap gap-1">
-                        <q-icon
-                            v-for="req in props.row.musthave"
-                            :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
-                            :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
-                            size="sm"
-                        >
-                            <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
-                        </q-icon>
-                    </div>
-                </q-td>
-                '''
-            )
-            self.table.add_slot(
-                "body-cell-desirable",
-                r'''
-                <q-td :props="props">
-                    <div class="flex flex-wrap gap-1">
-                        <q-icon
-                            v-for="req in props.row.desirable"
-                            :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
-                            :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
-                            size="sm"
-                        >
-                            <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
-                        </q-icon>
-                    </div>
-                </q-td>
-                '''
-            )
-            self.table.add_slot(
-                "body-cell-actions",
-                r'''
-                <q-td :props="props">
-                    <q-btn dense flat round icon="more_vert">
-                        <q-menu>
-                            <q-list style="min-width: 150px">
-                                <q-item clickable v-close-popup
-                                        @click="console.log('Emitting details for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'details', row_id: props.row.candidate_id})">
-                                    <q-item-section>Visa detaljer</q-item-section>
-                                </q-item>
-                                <q-item clickable v-close-popup
-                                        @click="console.log('Emitting edit for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'edit', row_id: props.row.candidate_id})">
-                                    <q-item-section>Redigera</q-item-section>
-                                </q-item>
-                                <q-item clickable v-close-popup
-                                        @click="console.log('Emitting delete for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'delete', row_id: props.row.candidate_id})">
-                                    <q-item-section>Ta bort</q-item-section>
-                                </q-list>
-                        </q-menu>
-                    </q-btn>
-                </q-td>
-                '''
-            )
-            self.table.add_slot(
-                "body-cell-status",
-                r'''
-                <q-td :props="props">
-                    <q-select
-                        dense
-                        outlined
-                        emit-value
-                        map-options
-                        :options="['Applied', 'Screened', 'Interviewed', 'Offered', 'Hired']"
-                        v-model="props.row.status"
-                        @update:model-value="$parent.$emit('status_change', {candidate_id: props.row.candidate_id, new_status: props.row.status})"
-                        style="min-width: 130px"
-                    />
-                </q-td>
-                '''
-            )
-            self.table.add_slot(
-                "header-cell-job_availability",
-                r'''
-                <q-th :props="props">
-                    <q-btn flat dense @click="sortByAbsJobAvailability(props)">
-                        {{ props.col.label }}
-                        <q-icon v-if="props.sortBy === 'job_availability' && props.descending" name="arrow_drop_down" />
-                        <q-icon v-if="props.sortBy === 'job_availability' && !props.descending" name="arrow_drop_up" />
-                    </q-btn>
-                </q-th>
-                '''
-            )
+            # self.table.add_slot('body-cell-combined_score', r'''
+            #     <q-td :props="props" class="text-center">
+            #         <q-badge
+            #             :color="
+            #                 props.row.combined_score >= 90 ? 'blue-2' :
+            #                 (props.row.combined_score >= 75 ? 'green-2' :
+            #                 (props.row.combined_score >= 60 ? 'yellow-2' : 'red-2'))
+            #             "
+            #             class="q-pa-sm text-subtitle2 text-black"
+            #             rounded
+            #         >
+            #             {{ props.row.combined_score }} %
+            #         </q-badge>
+            #     </q-td>
+            #     ''')
+            # self.table.add_slot('body-cell-availability', r'''
+            #     <q-td :props="props" class="text-center">
+            #         <q-badge
+            #             :color="
+            #                 props.row.availability === 'EXCELLENT' ? 'blue' :
+            #                 props.row.availability === 'GOOD' ? 'green' :
+            #                 props.row.availability === 'OK' ? 'orange' :
+            #                 'red'
+            #             "
+            #             class="shadow-2"
+            #             style="
+            #                 font-size: 14px;
+            #                 padding: 4px 8px;
+            #                 line-height: 1;
+            #                 min-width: 60px;
+            #                 justify-content: center;
+            #             "
+            #             rounded
+            #         >
+            #             {{ props.row.availability }}
+            #         </q-badge>
+            #     </q-td>
+            #     ''')
+            # self.table.add_slot(
+            #     "body-cell-musthave",
+            #     r'''
+            #     <q-td :props="props">
+            #         <div class="flex flex-wrap gap-1">
+            #             <q-icon
+            #                 v-for="req in props.row.musthave"
+            #                 :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
+            #                 :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
+            #                 size="sm"
+            #             >
+            #                 <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
+            #             </q-icon>
+            #         </div>
+            #     </q-td>
+            #     '''
+            # )
+            # self.table.add_slot(
+            #     "body-cell-desirable",
+            #     r'''
+            #     <q-td :props="props">
+            #         <div class="flex flex-wrap gap-1">
+            #             <q-icon
+            #                 v-for="req in props.row.desirable"
+            #                 :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
+            #                 :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
+            #                 size="sm"
+            #             >
+            #                 <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
+            #             </q-icon>
+            #         </div>
+            #     </q-td>
+            #     '''
+            # )
+            # self.table.add_slot(
+            #     "body-cell-actions",
+            #     r'''
+            #     <q-td :props="props">
+            #         <q-btn dense flat round icon="more_vert">
+            #             <q-menu>
+            #                 <q-list style="min-width: 150px">
+            #                     <q-item clickable v-close-popup
+            #                             @click="console.log('Emitting details for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'details', row_id: props.row.candidate_id})">
+            #                         <q-item-section>Visa detaljer</q-item-section>
+            #                     </q-item>
+            #                     <q-item clickable v-close-popup
+            #                             @click="console.log('Emitting edit for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'edit', row_id: props.row.candidate_id})">
+            #                         <q-item-section>Redigera</q-item-section>
+            #                     </q-item>
+            #                     <q-item clickable v-close-popup
+            #                             @click="console.log('Emitting delete for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'delete', row_id: props.row.candidate_id})">
+            #                         <q-item-section>Ta bort</q-item-section>
+            #                     </q-list>
+            #             </q-menu>
+            #         </q-btn>
+            #     </q-td>
+            #     '''
+            # )
+            # self.table.add_slot(
+            #     "body-cell-status",
+            #     r'''
+            #     <q-td :props="props">
+            #         <q-select
+            #             dense
+            #             outlined
+            #             emit-value
+            #             map-options
+            #             :options="['Applied', 'Screened', 'Interviewed', 'Offered', 'Hired']"
+            #             v-model="props.row.status"
+            #             @update:model-value="$parent.$emit('status_change', {candidate_id: props.row.candidate_id, new_status: props.row.status})"
+            #             style="min-width: 130px"
+            #         />
+            #     </q-td>
+            #     '''
+            # )
+            # self.table.add_slot(
+            #     "header-cell-job_availability",
+            #     r'''
+            #     <q-th :props="props">
+            #         <q-btn flat dense @click="sortByAbsJobAvailability(props)">
+            #             {{ props.col.label }}
+            #             <q-icon v-if="props.sortBy === 'job_availability' && props.descending" name="arrow_drop_down" />
+            #             <q-icon v-if="props.sortBy === 'job_availability' && !props.descending" name="arrow_drop_up" />
+            #         </q-btn>
+            #     </q-th>
+            #     '''
+            # )
+            # self.table.add_slot(
+            #     "body-cell-summary",
+            #     r'''
+            #     <q-td :props="props">
+            #         <q-expansion-item
+            #             dense
+            #             expand-separator
+            #             switch-toggle-side
+            #             label="Summary"
+            #             class="q-pa-none"
+            #             style="width: 100%"
+            #         >
+            #             <div class="q-pa-sm" style="white-space: pre-wrap; word-break: break-word;">
+            #                 {{ props.row.summary || 'No summary available' }}
+            #             </div>
+            #         </q-expansion-item>
+            #     </q-td>
+            #     '''
+            # )
+            self.table.add_slot('body', r'''
+                <q-tr :props="props">
+                    <q-td v-for="col in props.cols" :key="col.name" :props="props">
+                        
+                        <template v-if="col.name === 'combined_score'">
+                            <q-badge
+                                :color="props.row.combined_score >= 90 ? 'blue-2' : (props.row.combined_score >= 75 ? 'green-2' : (props.row.combined_score >= 60 ? 'yellow-2' : 'red-2'))"
+                                class="q-pa-sm text-subtitle2 text-black" rounded
+                            >
+                                {{ props.row.combined_score }} %
+                            </q-badge>
+                        </template>
+
+                        <template v-else-if="col.name === 'musthave' || col.name === 'desirable'">
+                            <div class="flex flex-wrap gap-1">
+                                <q-icon
+                                    v-for="req in props.row[col.name]"
+                                    :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
+                                    :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
+                                    size="sm"
+                                >
+                                    <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
+                                </q-icon>
+                            </div>
+                        </template>
+
+                        <template v-else-if="col.name === 'summary'">
+                            <q-btn flat dense color="primary" 
+                                :icon="props.expand ? 'keyboard_arrow_up' : 'keyboard_arrow_down'" 
+                                :label="props.expand ? 'Hide' : 'Show summary'" 
+                                @click="props.expand = !props.expand" />
+                        </template>
+
+                        <template v-else-if="col.name === 'actions'">
+                            <q-btn dense flat round icon="more_vert">
+                                <q-menu>
+                                    <q-list style="min-width: 150px">
+                                        <q-item clickable v-close-popup @click="$parent.$emit('menu_action', {action: 'details', row_id: props.row.candidate_id})">
+                                            <q-item-section>Visa detaljer</q-item-section>
+                                        </q-item>
+                                        <q-item clickable v-close-popup @click="$parent.$emit('menu_action', {action: 'asas', row_id: props.row.candidate_id})">
+                                            <q-item-section>VRedigera</q-item-section>
+                                        </q-item>
+                                        <q-item clickable v-close-popup @click="$parent.$emit('menu_action', {action: 'details', row_id: props.row.candidate_id})">
+                                            <q-item-section>Visa Delete</q-item-section>
+                                        </q-item>
+                                        </q-list>
+                                </q-menu>
+                            </q-btn>
+                        </template>
+                        <template v-else-if="col.name === 'status'">
+                            <q-select
+                                dense
+                                outlined
+                                emit-value
+                                map-options
+                                :options="''' + str(status_options) + r'''"
+                                v-model="props.row.status"
+                                @update:model-value="$parent.$emit('status_change', {candidate_id: props.row.candidate_id, new_status: props.row.status})"
+                                style="min-width: 130px"
+                            />
+                        </template>  
+                        <template v-else>
+                            {{ col.value }}
+                        </template>
+                        
+                    </q-td>
+                </q-tr>
+
+                <q-tr v-show="props.expand" :props="props" class="bg-blue-grey-1">
+                    <q-td colspan="100%">
+                        <div class="q-pa-md" style="white-space: pre-wrap; max-width: 1200px;">
+                            <div class="text-h6"></div>
+                            {{ props.row.summary || 'No Summary available' }}
+                        </div>
+                    </q-td>
+                </q-tr>
+            ''')
             self.table.on('menu_action', self._on_action)
             self.table.on('status_change', self._on_status_change)
             self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))
@@ -333,7 +440,7 @@ class CandidateJobsTable():
         print(f"Action: {action} på kandidat: {candidate_name} (ID: {row_id})")
 
         if action == 'details':
-            ui.notify(f"Visar detaljer för {candidate_name}", type='info')
+            ui.notify(f"Visar detaljer för {candidate_name}, status options: {self.status_options}", type='info')
         elif action == 'edit':
             ui.notify(f"Redigerar {candidate_name}", type='warning')
         elif action == 'delete':
@@ -442,8 +549,8 @@ class CandidateJobsTable():
     
     async def re_evaluate(self, shortlist_size: int = 3):
         print("in re_evaluate")
-        self.controller.shortlist_size = shortlist_size
-        self.controller.requirements = self.musthave_req_names + self.desirable_req_names
+        # self.controller.shortlist_size = shortlist_size
+        # self.controller.requirements = self.musthave_req_names + self.desirable_req_names
         candidates = await self.api_client.api_reevaluate()
         print("nr of candidates: ", len(candidates))
         self.table.update(candidates)

@@ -69,13 +69,49 @@ def get_test_data():
     return candidates
 
 
-
-    
-
 @ui.page('/candidatejobs')
 async def candidate_jobs_page():
     drawer = LeftDrawer()
+
+    if not ui_controller.candidate_states_name_list: 
+        states = await API_client.get_candidate_states() 
+        ui_controller.set_candidate_states(states) 
+        status_options = ui_controller.candidate_states_name_list
+    else:
+        status_options = ui_controller.candidate_states_name_list
+    
+
+    async def get_jobs_from_dir_api():
+        joblist = await API_client.get_jobs_from_directory()
+        JobList(joblist, callbacks=callbacks)
+        print("FROM API:", joblist)
+
+
+    async def on_status_change(job_id, new_status):  #Behöver skrivas om
+        ui_controller.job_id = job_id
+        ui_controller.job_state = new_status
+        await API_client.job_status_update(job_id, new_status)
+        print(f"Status updated for job_id={job_id} to {new_status}")
+    
+    callbacks = { "on_status_change": on_status_change, "status_options": status_options } 
     print("In candidatejobs_page")
-    candidates = get_test_data()
-    candidate_job_table = CandidateJobsTable(API_client, candidates=candidates)
-    # candidate_job_table = CandidateJobsTable(candidates=candidates)
+
+    job_id = ui.context.client.request.query_params.get('job_id')
+    print("Job id:", job_id)
+    # candidates = get_test_data()
+    candidates = await API_client.get_candidates_job(job_id)
+    print("Candidate i candidate_jobs_page:")
+    print(candidates)
+    candidate_job_table = CandidateJobsTable(
+        candidates=candidates,
+        callbacks=callbacks
+    )
+    
+
+# @ui.page('/candidatejobs')
+# async def candidate_jobs_page():
+#     drawer = LeftDrawer()
+#     print("In candidatejobs_page")
+#     candidates = get_test_data()
+#     candidate_job_table = CandidateJobsTable(API_client, candidates=candidates)
+#     # candidate_job_table = CandidateJobsTable(candidates=candidates)

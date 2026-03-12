@@ -7,13 +7,14 @@ from niceGUI.app_state import API_client, ui_controller
 async def jobs_page():
     drawer = LeftDrawer()
 
-    
     if not ui_controller.job_states_name_list: 
-        states = await API_client.get_datamodel_jobs() 
+        states = await API_client.get_job_states() 
         ui_controller.set_job_states(states) 
         status_options = ui_controller.job_states_name_list
     else:
         status_options = ui_controller.job_states_name_list
+    
+
 
     async def get_jobs_from_dir_api():
         joblist = await API_client.get_jobs_from_directory()

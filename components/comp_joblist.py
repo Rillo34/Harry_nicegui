@@ -23,42 +23,53 @@ class JobList:
             job_dict = job.model_dump(exclude_none=True)
             job_dict['musthave'] = [r.model_dump(exclude_none=True) for r in job.requirements if r.ismusthave]
             job_dict['desirable'] = [r.model_dump(exclude_none=True) for r in job.requirements if not r.ismusthave]
-            if job.due_date:
-                days_left = (job.due_date - date.today()).days
-                job_dict['days_left'] = f"{days_left}d" if days_left >= 0 else f"{-days_left}d"
-            else:
-                job_dict['days_left'] = "N/A"
             job_dict['expanded'] = False
-            # job_dict['status'] = job_dict.get('status', job_dict.get('state', '1-Open')) if job_dict.get('status', job_dict.get('state', '1-Open')) in ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"] else "1-Open"
             self.jobs_list.append(job_dict)
         # print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
 
         self.valid_states = ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"]
 
-        self.preferred_column_order = [
-            'job_id', 'customer', 'title', 'contact_person', 'start_date', 'end_date', 'job_hours', 'duration', 'due_date',
-            'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
-        ]
+        # self.preferred_column_order = [
+        #     'job_id', 'customer', 'title', 'contact_person', 'start_date', 'end_date', 'job_hours', 'duration', 'due_date',
+        #     'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
+        # ]
+        exclude = {"expanded", "musthave", "desirable", "description", "requirements"}
 
         self.all_columns = [
-            {"name": "job_id", "label": "Job ID", "field": "job_id", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-            {"name": "customer", "label": "Customer", "field": "customer", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-            {"name": "title", "label": "Title", "field": "title", "sortable": True, "style": "max-width: 200px; white-space: normal;", "align": "left"},
-            {"name": "contact_person", "label": "Contact Person", "field": "contact_person", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-            {"name": "start_date", "label": "Start Date", "field": "start_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
-            {"name": "end_date", "label": "End Date", "field": "end_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
-            {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-            {"name": "job_hours", "label": "Job Hours", "field": "job_hours", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-            {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-            {"name": "due_date", "label": "Due Date", "field": "due_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
-            {"name": "days_left", "label": "Days Left", "field": "days_left", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-            {"name": "candidates", "label": "Candidates", "field": "candidates", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-            {"name": "highest_candidate_status", "label": "Top Candidate Status", "field": "highest_candidate_status", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-            {"name": "assigned_to", "label": "Assigned To", "field": "assigned_to", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-            {"name": "state", "label": "State", "field": "state", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
-            {"name": "details", "label": "Details", "field": "details", "sortable": False, "style": "max-width: 100px;", "align": "center"},
-            {"name": "actions", "label": "", "field": "actions", "sortable": False, "style": "width: 50px;", "align": "center"}
+            {
+                "name": k,
+                "label": k.replace("_", " ").title(),
+                "field": k,
+                "sortable": True,
+                "align": "left",
+            }
+            for k in self.jobs_list[0].keys()
+            if k not in exclude
         ]
+        self.all_columns += [
+            {"name": "details", "label": "Details", "field": "details", "sortable": False, "align": "center"},
+            {"name": "actions", "label": "", "field": "actions", "sortable": False, "align": "center"},
+        ]
+        print(self.all_columns)
+        # self.all_columns = [
+        #     {"name": "job_id", "label": "Job ID", "field": "job_id", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+        #     {"name": "customer", "label": "Customer", "field": "customer", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
+        #     {"name": "title", "label": "Title", "field": "title", "sortable": True, "style": "max-width: 200px; white-space: normal;", "align": "left"},
+        #     {"name": "contact_person", "label": "Contact Person", "field": "contact_person", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
+        #     {"name": "start_date", "label": "Start Date", "field": "start_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
+        #     {"name": "end_date", "label": "End Date", "field": "end_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
+        #     {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+        #     {"name": "job_hours", "label": "Job Hours", "field": "job_hours", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+        #     {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+        #     {"name": "due_date", "label": "Due Date", "field": "due_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
+        #     {"name": "days_left", "label": "Days Left", "field": "days_left", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+        #     {"name": "candidates", "label": "Candidates", "field": "candidates", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
+        #     {"name": "highest_candidate_status", "label": "Top Candidate Status", "field": "highest_candidate_status", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
+        #     {"name": "assigned_to", "label": "Assigned To", "field": "assigned_to", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
+        #     {"name": "state", "label": "State", "field": "state", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
+        #     {"name": "details", "label": "Details", "field": "details", "sortable": False, "style": "max-width: 100px;", "align": "center"},
+        #     {"name": "actions", "label": "", "field": "actions", "sortable": False, "style": "width: 50px;", "align": "center"}
+        # ]
 
         self.selected_columns = []
         self.columns = [col for col in self.all_columns if col['name'] not in self.selected_columns]
@@ -160,6 +171,12 @@ class JobList:
                                     </li>
                                     <li v-if="!props.row.desirable || !props.row.desirable.length">None</li>
                                 </ul>
+                                <div style="margin-bottom: 10px;">
+                                    <strong>Summary:</strong>
+                                    <div class="whitespace-normal break-words overflow-wrap-anywhere">
+                                        {{ props.row.summary || 'None' }}
+                                    </div>
+                                </div>
                             </div>
                         </q-td>
                     </q-tr>
@@ -176,10 +193,10 @@ class JobList:
             col for col in self.all_columns
             if col['name'] not in self.selected_columns
         ]
-        self.columns = sorted(
-            self.columns,
-            key=lambda col: self.preferred_column_order.index(col['name']) if col['name'] in self.preferred_column_order else len(self.preferred_column_order)
-        )
+        # self.columns = sorted(
+        #     self.columns,
+        #     key=lambda col: self.preferred_column_order.index(col['name']) if col['name'] in self.preferred_column_order else len(self.preferred_column_order)
+        # )
         self.table.columns = [col for col in self.columns if col['name'] not in ['musthave', 'desirable']]
         self.table.update()
 
@@ -206,17 +223,20 @@ class JobList:
         payload = event.args
         action = payload.get('action')
         row_id = payload.get('row_id')
+        print("action:", action)
+        print("row_id", row_id)
         row = self.jobs_map.get(row_id)
+        print("job_id : ", row.job_id)
         if not row:
             print(f"Could not find job with ID: {row_id}")
             return
         print("Clicked on:", row)
-        # if action == 'candidatejob':
-        #     self.controller.job_id = row.job_id
-        #     ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')
-        #     ui.notify(f"Navigating to candidate job {row.title}", type='info')
-        # elif action == 'edit':
-        #     ui.notify(f"Editing {row.title}", type='warning')
-        # elif action == 'delete':
-        #     ui.notify(f"Deleting {row.title}", type='negative')
+        if action == 'candidatejob':
+            # self.controller.job_id = row.job_id
+            ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')
+            ui.notify(f"Navigating to candidate job {row.title}", type='info')
+        elif action == 'edit':
+            ui.notify(f"Editing {row.title}", type='warning')
+        elif action == 'delete':
+            ui.notify(f"Deleting {row.title}", type='negative')
 

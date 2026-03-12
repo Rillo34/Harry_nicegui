@@ -23,6 +23,7 @@ class CandidateJobsTable:
         self.candidates_list = []
         for cand in self.candidates_map.values():
             cand_copy = cand.copy()
+            reqs = cand.get('requirements') or [] 
             cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
             cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
             cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"

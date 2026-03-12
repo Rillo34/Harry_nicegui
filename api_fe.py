@@ -3,7 +3,7 @@ import json
 import requests
 import httpx
 from nicegui import events, ui
-from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateResponse
+from backend.models import RequirementPayload, EvaluateResponse, ReSize, ReSizeResponse, ReEvaluateResponse, CandidateResultLong
 from backend.models import CompanyProfile, CompanyJobFit, User, ContractAllocationChangeRequest, NewSummary, JobStatusUpdateRequest, ContractAllocationMonthRequest
 from backend.models import ContractAllocationRequest
 
@@ -14,6 +14,57 @@ class APIController:
         self.controller = controller
 
     async def _request(self, method, endpoint, *, params=None, json=None, files=None, timeout=30):
+        # --- 1️⃣ URL info ---
+        url = f"{self.BASE.rstrip('/')}/{endpoint.lstrip('/')}"
+        print("===== REQUEST DEBUG =====")
+        print("HTTP method:", method)
+        print("BASE URL:", self.BASE)
+        print("Endpoint:", endpoint)
+        print("Full URL:", url)
+        print("Params:", params)
+        print("JSON body:", json)
+        print("Files:", files)
+        print("=========================")
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=json,
+                    files=files,
+                )
+
+            # --- 2️⃣ Response info ---
+            print("===== RESPONSE DEBUG =====")
+            print("Status code:", response.status_code)
+            print("Headers:", response.headers)
+            print("Response text:", response.text)
+            print("Response JSON (attempt to parse):")
+            try:
+                print(response.json())
+            except Exception as e:
+                print("Could not parse JSON:", e)
+            print("==========================")
+
+            # --- 3️⃣ Kontrollera statuskod ---
+            if response.status_code != 200:
+                print("WARNING: Status code != 200 → returning None")
+                ui.notify(f'Backend error {response.status_code}', type='warning')
+                return None
+
+            # --- 4️⃣ Returnera JSON ---
+            return response.json()
+
+        except Exception as e:
+            print("===== EXCEPTION =====")
+            print("Network or request exception:", e)
+            print("=====================")
+            ui.notify(f'Nätverksfel: {e}', type='warning')
+            return None
+    
+    async def _requestOLD(self, method, endpoint, *, params=None, json=None, files=None, timeout=30):
         url = f"{self.BASE}{endpoint}"
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -45,7 +96,7 @@ class APIController:
     async def get_all_jobs(self):
         return await self._request("GET", "/get-jobs")
 
-    async def get_datamodel_jobs(self):
+    async def get_job_states(self):
         return await self._request("GET", "/get-job-states")
 
     async def get_all_mails(self):
@@ -194,42 +245,46 @@ class APIController:
     # RESIZE / REEVALUATE
     # -----------------------------
 
-    async def api_resize(self):
-        payload = ReSize(
-            job_id=self.controller.job_id,
-            shortlist_size=self.controller.shortlist_size
-        )
-        data = await self._request("POST", "/choose-shortlist-size", json=payload.dict())
-        return ReSizeResponse(**data) if data else None
+    # async def api_resize(self):
+    #     payload = ReSize(
+    #         job_id=self.controller.job_id,
+    #         shortlist_size=self.controller.shortlist_size
+    #     )
+    #     data = await self._request("POST", "/choose-shortlist-size", json=payload.dict())
+    #     return ReSizeResponse(**data) if data else None
 
-    async def api_reevaluate(self):
-        payload = ReEvaluateRequest(
-            job_id=self.controller.job_id,
-            shortlist_size=self.controller.shortlist_size,
-            requirements=self.controller.requirements
-        )
-        data = await self._request("POST", "/re-evaluate", json=payload.dict())
-        return ReEvaluateResponse(**data) if data else None
+    # async def api_reevaluate(self):
+    #     payload = ReEvaluateRequest(
+    #         job_id=self.controller.job_id,
+    #         shortlist_size=self.controller.shortlist_size,
+    #         requirements=self.controller.requirements
+    #     )
+    #     data = await self._request("POST", "/re-evaluate", json=payload.dict())
+    #     return ReEvaluateResponse(**data) if data else None
 
     # -----------------------------
     # CANDIDATES
     # -----------------------------
 
-    async def api_get_candidates_job(self):
-        data = await self._request(
-            "GET",
-            "/get-candidates-job",
-            params={"job_id": self.controller.job_id}
-        )
-        return CandidatesJobResponse(**data) if data else None
-
-    async def api_get_internal_candidates(self):
+    async def get_candidates_job(self, job_id):
         data = await self._request(
             "POST",
-            "/evaluate-internal-candidates",
-            json={"job_id": self.controller.job_id}
+            "/get-candidates-job",
+            json={"job_id": job_id}
         )
-        return ReEvaluateResponse(**data) if data else None
+        print("data received:", data)
+        return [CandidateResultLong(**item) for item in data]
+    
+    async def get_candidate_states(self):
+        return await self._request("GET", "/get-candidate-states")
+
+    # async def api_get_internal_candidates(self):
+    #     data = await self._request(
+    #         "POST",
+    #         "/evaluate-internal-candidates",
+    #         json={"job_id": self.controller.job_id}
+    #     )
+    #     return ReEvaluateResponse(**data) if data else None
     
     async def get_all_candidates(self):
         data = await self._request("GET", "/get-all-candidates")
@@ -293,6 +348,11 @@ class UploadController:
         self.job_states_name_list: list = []
         self.job_states_mapping_dict: dict = {}
 
+        # Candidate state model
+        self.candidate_states_list: list = []
+        self.candidate_states_name_list: list = []
+        self.candidate_states_mapping_dict: dict = {}
+
         # Company
         self.company_id: str = ""
         self.company_name: str = ""
@@ -312,6 +372,12 @@ class UploadController:
         self.job_states_list = states
         self.job_states_name_list = [s["name"] for s in states] 
         self.job_states_mapping_dict = {s["id"]: s["name"] for s in states}
+    
+    def set_candidate_states(self, states): 
+        self.candidate_states_list = states
+        self.candidate_states_name_list = [s["name"] for s in states] 
+        self.candidate_states_mapping_dict = {s["id"]: s["name"] for s in states}
+    
 
     def add_requirement(self, requirement):
         """Add a requirement object to the list."""
