@@ -11,6 +11,7 @@ from datetime import date
 from backend.models import CandidateResultLong, RequirementResult
 from nicegui import ui
 from typing import List, Dict
+import copy
 import asyncio
 from datetime import date
 from niceGUI.api_fe import APIController, UploadController
@@ -23,6 +24,7 @@ class CandidateJobsTable():
         # self.table = ui.table(columns=[], rows=[])
         self.on_status_change = callbacks["on_status_change"] 
         self.status_options = callbacks["status_options"]
+        self.on_reeval = callbacks["on_reeval"]
         self.req_changed = False
         self.requirements = [
             {
@@ -32,6 +34,7 @@ class CandidateJobsTable():
             }
             for r in candidates[0].requirements
         ]
+        self.orig_requirements = copy.deepcopy(self.requirements)
         self._process_candidates(candidates)
         self._build_ui()
 
@@ -49,20 +52,10 @@ class CandidateJobsTable():
             reqs = cand.get('requirements') or []   # <-- säkerhetskontroll
             cand_copy['musthave'] = [req for req in reqs if req['ismusthave']]
             cand_copy['desirable'] = [req for req in reqs if not req['ismusthave']]
-            # cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
-            # cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
             cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}"
-            # if cand_copy.get('available_from'):
-            #     days = (cand_copy['available_from'] - self.fictive_start_date).days
-            #     cand_copy['job_availability'] = f"{days}d"
-            # else:
-            #     cand_copy['job_availability'] = "N/A"
             self.candidates_list.append(cand_copy)
         
         self.original_candidates_list = self.candidates_list.copy()
-        
-        # print(f"Job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
-
         priority_fields = ["candidate_id", "name", "combined_score"]
         other_fields = [f for f in CandidateResultLong.__fields__ if f not in priority_fields and f != "requirements"]
         excluded_fields = ["available_from"]
@@ -121,8 +114,7 @@ class CandidateJobsTable():
             columns=[],   # inga kolumner ännu
             rows=[],      # inga rader ännu
         )
-    
-    
+
     
     def _build_ui(self):
         with ui.row().classes('items-center w-full justify-between'):
@@ -139,157 +131,11 @@ class CandidateJobsTable():
             row_key="candidate_id",
             pagination={'sortBy': 'combined_score', 'descending': True, 'rowsPerPage': 15}
         ).classes("table-fixed w-full max-w-full") #classes("w-full max-w-[1800px]")
-
         status_options = self.status_options
         print("status options: ", status_options)
-        
         status_json = json.dumps(status_options)
         print(status_json)
         with self.table:
-            # self.table.add_slot('body-cell-combined_score', r'''
-            #     <q-td :props="props" class="text-center">
-            #         <q-badge
-            #             :color="
-            #                 props.row.combined_score >= 90 ? 'blue-2' :
-            #                 (props.row.combined_score >= 75 ? 'green-2' :
-            #                 (props.row.combined_score >= 60 ? 'yellow-2' : 'red-2'))
-            #             "
-            #             class="q-pa-sm text-subtitle2 text-black"
-            #             rounded
-            #         >
-            #             {{ props.row.combined_score }} %
-            #         </q-badge>
-            #     </q-td>
-            #     ''')
-            # self.table.add_slot('body-cell-availability', r'''
-            #     <q-td :props="props" class="text-center">
-            #         <q-badge
-            #             :color="
-            #                 props.row.availability === 'EXCELLENT' ? 'blue' :
-            #                 props.row.availability === 'GOOD' ? 'green' :
-            #                 props.row.availability === 'OK' ? 'orange' :
-            #                 'red'
-            #             "
-            #             class="shadow-2"
-            #             style="
-            #                 font-size: 14px;
-            #                 padding: 4px 8px;
-            #                 line-height: 1;
-            #                 min-width: 60px;
-            #                 justify-content: center;
-            #             "
-            #             rounded
-            #         >
-            #             {{ props.row.availability }}
-            #         </q-badge>
-            #     </q-td>
-            #     ''')
-            # self.table.add_slot(
-            #     "body-cell-musthave",
-            #     r'''
-            #     <q-td :props="props">
-            #         <div class="flex flex-wrap gap-1">
-            #             <q-icon
-            #                 v-for="req in props.row.musthave"
-            #                 :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
-            #                 :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
-            #                 size="sm"
-            #             >
-            #                 <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
-            #             </q-icon>
-            #         </div>
-            #     </q-td>
-            #     '''
-            # )
-            # self.table.add_slot(
-            #     "body-cell-desirable",
-            #     r'''
-            #     <q-td :props="props">
-            #         <div class="flex flex-wrap gap-1">
-            #             <q-icon
-            #                 v-for="req in props.row.desirable"
-            #                 :name="req.status === 'YES' ? 'check_circle' : req.status === 'NO' ? 'cancel' : 'help'"
-            #                 :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
-            #                 size="sm"
-            #             >
-            #                 <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
-            #             </q-icon>
-            #         </div>
-            #     </q-td>
-            #     '''
-            # )
-            # self.table.add_slot(
-            #     "body-cell-actions",
-            #     r'''
-            #     <q-td :props="props">
-            #         <q-btn dense flat round icon="more_vert">
-            #             <q-menu>
-            #                 <q-list style="min-width: 150px">
-            #                     <q-item clickable v-close-popup
-            #                             @click="console.log('Emitting details for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'details', row_id: props.row.candidate_id})">
-            #                         <q-item-section>Visa detaljer</q-item-section>
-            #                     </q-item>
-            #                     <q-item clickable v-close-popup
-            #                             @click="console.log('Emitting edit for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'edit', row_id: props.row.candidate_id})">
-            #                         <q-item-section>Redigera</q-item-section>
-            #                     </q-item>
-            #                     <q-item clickable v-close-popup
-            #                             @click="console.log('Emitting delete for ' + props.row.candidate_id); $parent.$emit('menu_action', {action: 'delete', row_id: props.row.candidate_id})">
-            #                         <q-item-section>Ta bort</q-item-section>
-            #                     </q-list>
-            #             </q-menu>
-            #         </q-btn>
-            #     </q-td>
-            #     '''
-            # )
-            # self.table.add_slot(
-            #     "body-cell-status",
-            #     r'''
-            #     <q-td :props="props">
-            #         <q-select
-            #             dense
-            #             outlined
-            #             emit-value
-            #             map-options
-            #             :options="['Applied', 'Screened', 'Interviewed', 'Offered', 'Hired']"
-            #             v-model="props.row.status"
-            #             @update:model-value="$parent.$emit('status_change', {candidate_id: props.row.candidate_id, new_status: props.row.status})"
-            #             style="min-width: 130px"
-            #         />
-            #     </q-td>
-            #     '''
-            # )
-            # self.table.add_slot(
-            #     "header-cell-job_availability",
-            #     r'''
-            #     <q-th :props="props">
-            #         <q-btn flat dense @click="sortByAbsJobAvailability(props)">
-            #             {{ props.col.label }}
-            #             <q-icon v-if="props.sortBy === 'job_availability' && props.descending" name="arrow_drop_down" />
-            #             <q-icon v-if="props.sortBy === 'job_availability' && !props.descending" name="arrow_drop_up" />
-            #         </q-btn>
-            #     </q-th>
-            #     '''
-            # )
-            # self.table.add_slot(
-            #     "body-cell-summary",
-            #     r'''
-            #     <q-td :props="props">
-            #         <q-expansion-item
-            #             dense
-            #             expand-separator
-            #             switch-toggle-side
-            #             label="Summary"
-            #             class="q-pa-none"
-            #             style="width: 100%"
-            #         >
-            #             <div class="q-pa-sm" style="white-space: pre-wrap; word-break: break-word;">
-            #                 {{ props.row.summary || 'No summary available' }}
-            #             </div>
-            #         </q-expansion-item>
-            #     </q-td>
-            #     '''
-            # )
             self.table.add_slot('body', r'''
                 <q-tr :props="props">
                     <q-td v-for="col in props.cols" :key="col.name" :props="props">
@@ -462,14 +308,14 @@ class CandidateJobsTable():
             cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
             cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
             cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"
-            if cand_copy.get('available_from'):
-                days = (cand_copy['available_from'] - self.fictive_start_date).days
-                cand_copy['job_availability'] = f"{days}d"
-            else:
-                cand_copy['job_availability'] = "N/A"
+            # if cand_copy.get('available_from'):
+            #     days = (cand_copy['available_from'] - self.fictive_start_date).days
+            #     cand_copy['job_availability'] = f"{days}d"
+            # else:
+            #     cand_copy['job_availability'] = "N/A"
             self.candidates_list.append(cand_copy)
 
-        print(f"Updated job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
+        # print(f"Updated job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
         self.musthave_req_names = sorted({
             req["reqname"] for cand in self.candidates_list for req in cand["musthave"]
         })
@@ -484,6 +330,7 @@ class CandidateJobsTable():
         if self.filter_section_expansion:
             self._rebuild_filters()
         self.apply_filters()
+
 
     def _rebuild_filters(self):
     
@@ -507,7 +354,7 @@ class CandidateJobsTable():
 
                         ui.label("Desirable").classes("text-md font-semibold mt-6")
                         
-                        with ui.row().classes('flex-wrap gap-2'):
+                        with ui.row().classes('flex-wrap gap-1'):
                             for req_name in self.desirable_req_names:
                                 ui.chip(req_name, removable=True, on_click=lambda e, rn=req_name: self._toggle_filter(rn)) \
                                     .props(f"color={'green' if req_name in self.filters else 'grey'} outline") \
@@ -522,13 +369,15 @@ class CandidateJobsTable():
                             label='Add requirement'
                         ).classes('w-full') \
                         .on('keydown.enter', lambda e: self._add_requirement_chip(add_input.value))
-                        Reeval_button = (
-                            ui.button('Re-evaluate', icon='send')
-                            .classes('bg-blue-500 text-white')
-                            .on('click', lambda e: self.re_evaluate())
-                        )
-                        Reeval_button.bind_enabled_from(self, 'req_changed')
-
+                        with ui.row():
+                            Reeval_button = (
+                                ui.button('Re-evaluate', icon='send')
+                                .classes('bg-blue-500 text-white')
+                                .on('click', lambda e: self.re_evaluate())
+                            )
+                            Reeval_button.bind_enabled_from(self, 'req_changed')
+                            eval_label = ui.label("Requirement changed, press to execute").classes('text-red-500')
+                            eval_label.bind_visibility_from(self, 'req_changed')
 
                         # Rad 2: Search + Select på samma rad
                         with ui.row().classes('w-full gap-2 flex-nowrap'):
@@ -544,20 +393,18 @@ class CandidateJobsTable():
                                 on_change=lambda e: self._update_columns(e.value)
                             ).classes('w-1/2')
                         
-        print("filters:\n", self.filters)     
+        # print("filters:\n", self.filters)     
         self.apply_filters()
     
     async def re_evaluate(self, shortlist_size: int = 3):
-        print("in re_evaluate")
-        # self.controller.shortlist_size = shortlist_size
-        # self.controller.requirements = self.musthave_req_names + self.desirable_req_names
-        candidates = await self.api_client.api_reevaluate()
+        candidates = await self.on_reeval(self.requirements)
         print("nr of candidates: ", len(candidates))
-        self.table.update(candidates)
-        ui.notify(f"Updated with {len(candidates)} candidates")
+        self.update(candidates)
+        self.req_changed = False
+        self.orig_requirements = copy.deepcopy(self.requirements)
 
     def _add_requirement_chip(self, req_name: str):
-        print("in rebuild", req_name)
+        print("in rebuild with new requiremet", req_name)
         self.musthave_req_names.append(req_name)
         new_req = {
                 "reqname": req_name,
@@ -567,6 +414,12 @@ class CandidateJobsTable():
         self.requirements.append(new_req)        
         self._rebuild_filters()
         print("reuirements:\n", self.requirements)
+        self.req_changed = self.requirements != self.orig_requirements
+        print("self requirements = ", self.requirements)
+        print("self orig req = ", self.orig_requirements)
+
+        if self.req_changed:
+            print("ja de skiljer sig åt")
         self.apply_filters()
 
     def _toggle_req(self, req_name: str):
@@ -583,6 +436,13 @@ class CandidateJobsTable():
                 req["ismusthave"] = not req["ismusthave"]
                 
         print("reuirements:\n", self.requirements)
+        self.req_changed = self.requirements != self.orig_requirements
+        print("self requirements = ", self.requirements)
+        print("self orig req = ", self.orig_requirements)
+        
+        if self.req_changed:
+            print("ja de skiljer sig åt")
+
         self._rebuild_filters()
         self.apply_filters()
 
@@ -597,6 +457,7 @@ class CandidateJobsTable():
         self.apply_filters()
 
     def _remove_filter(self, req_name: str):
+        print("in remove filter")
         if req_name in self.musthave_req_names:
             self.musthave_req_names.remove(req_name)
         if req_name in self.desirable_req_names:
@@ -605,6 +466,10 @@ class CandidateJobsTable():
             r for r in self.requirements
             if r["reqname"] != req_name
         ]
+        self.req_changed = self.requirements != self.orig_requirements
+        if self.req_changed:
+            print("ja de skiljer sig åt")
+
         self._rebuild_filters()
         self.apply_filters()
 
@@ -639,114 +504,3 @@ class CandidateJobsTable():
         # print(self.table.rows)
         self.table.update()
 
-def get_initial_data() -> List[CandidateResultLong]:
-    fake_candidates = [
-    {
-        "candidate_id": "CAND_001",
-        "name": "Alice Andersson",
-        "assignment": "Backend Developer",
-        "years_exp": "5",
-        "location": "Stockholm",
-        "education": "MSc Computer Science",
-        "internal": False,
-        "available_from": date.today() + timedelta(days=30),
-        "combined_score": 0.82,
-        "summary": "Strong backend profile with solid Python and API experience.",
-        "availability": "EXCELLENT",
-        "requirements": [
-            {"reqname": "Python", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Django", "status": "MAYBE", "ismusthave": False, "source": "USER"},
-            {"reqname": "REST APIs", "status": "MAYBE", "ismusthave": True, "source": "JD"},
-        ],
-        "status": "Shortlisted",
-    },
-    {
-        "candidate_id": "CAND_002",
-        "name": "Björn Berg",
-        "assignment": "Frontend Developer",
-        "years_exp": "3",
-        "location": "Göteborg",
-        "education": "BSc Information Technology",
-        "internal": True,
-        "available_from": date.today() + timedelta(days=14),
-        "combined_score": 0.74,
-        "summary": "Good React skills, some gaps in TypeScript.",
-        "availability": "GOOD",
-        "requirements": [
-            {"reqname": "Python", "status": "NO", "ismusthave": True, "source": "JD"},
-            {"reqname": "Django", "status": "MAYBE", "ismusthave": False, "source": "USER"},
-            {"reqname": "REST APIs", "status": "YES", "ismusthave": True, "source": "JD"},
-        ],
-        "status": "Consider",
-    },
-    {
-        "candidate_id": "CAND_003",
-        "name": "Carla Carlsson",
-        "assignment": "Data Scientist",
-        "years_exp": "6",
-        "location": "Malmö",
-        "education": "PhD Statistics",
-        "internal": False,
-        "available_from": date.today() + timedelta(days=60),
-        "combined_score": 0.88,
-        "summary": "Excellent ML background, strong in Python and statistics.",
-        "availability": "OK",
-        "requirements": [
-            {"reqname": "Python", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Django", "status": "NO", "ismusthave": False, "source": "USER"},
-            {"reqname": "REST APIs", "status": "YES", "ismusthave": True, "source": "JD"},
-        ],
-        "status": "Shortlisted",
-    },
-    {
-        "candidate_id": "CAND_004",
-        "name": "David Dahl",
-        "assignment": "DevOps Engineer",
-        "years_exp": "4",
-        "location": "Uppsala",
-        "education": "BSc Systems Engineering",
-        "internal": True,
-        "available_from": date.today() + timedelta(days=7),
-        "combined_score": 0.69,
-        "summary": "Solid CI/CD knowledge, limited cloud exposure.",
-        "availability": "POOR",
-        "requirements": [
-            {"reqname": "Python", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Django", "status": "MAYBE", "ismusthave": False, "source": "USER"},
-            {"reqname": "REST APIs", "status": "NO", "ismusthave": True, "source": "JD"},
-        ],
-        "status": "Consider",
-    },
-    {
-        "candidate_id": "CAND_005",
-        "name": "Eva Ek",
-        "assignment": "Project Manager",
-        "years_exp": "10",
-        "location": "Stockholm",
-        "education": "MBA",
-        "internal": False,
-        "available_from": date.today() + timedelta(days=90),
-        "combined_score": 0.77,
-        "summary": "Experienced PM with agile background.",
-        "availability": "OK",
-        "requirements": [
-            {"reqname": "Python", "status": "YES", "ismusthave": True, "source": "JD"},
-            {"reqname": "Django", "status": "MAYBE", "ismusthave": False, "source": "USER"},
-            {"reqname": "REST APIs", "status": "YES", "ismusthave": True, "source": "JD"},
-        ],
-        "status": "Shortlisted",
-    }
-]
-    return [CandidateResultLong(**cand) for cand in fake_candidates] 
-
-
-# @ui.page('/')
-# def main_page():
-#     initial_candidates = get_initial_data()
-#     the_candidates = [CandidateResultLong(**cand) for cand in initial_candidates]
-#     table = CandidateJobsTable(candidates=the_candidates)
-#     # input("get new candidates")
-#     # new_candidates =get_new_dummy_data()
-#     # table.update(new_candidates)
-
-# ui.run(port=8004, reload=True)

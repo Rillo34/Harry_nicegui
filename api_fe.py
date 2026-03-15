@@ -253,27 +253,21 @@ class APIController:
     #     data = await self._request("POST", "/choose-shortlist-size", json=payload.dict())
     #     return ReSizeResponse(**data) if data else None
 
-    # async def api_reevaluate(self):
-    #     payload = ReEvaluateRequest(
-    #         job_id=self.controller.job_id,
-    #         shortlist_size=self.controller.shortlist_size,
-    #         requirements=self.controller.requirements
-    #     )
-    #     data = await self._request("POST", "/re-evaluate", json=payload.dict())
-    #     return ReEvaluateResponse(**data) if data else None
+    async def reeval_new_requirements(self, job_id, requirements):
+        data = await self._request(
+            "POST",
+            "/reeval-new-requirements",
+            json={
+                "job_id": job_id,
+                "requirements": requirements
+            }
+        )
+        return [CandidateResultLong(**item) for item in data]
+
 
     # -----------------------------
     # CANDIDATES
     # -----------------------------
-
-    async def get_candidates_job(self, job_id):
-        data = await self._request(
-            "POST",
-            "/get-candidates-job",
-            json={"job_id": job_id}
-        )
-        print("data received:", data)
-        return [CandidateResultLong(**item) for item in data]
     
     async def get_candidate_states(self):
         return await self._request("GET", "/get-candidate-states")
@@ -290,6 +284,22 @@ class APIController:
         data = await self._request("GET", "/get-all-candidates")
         print(data)
         return data
+
+
+    # -----------------------------
+    # CANDIDATE JOB
+    # -----------------------------
+
+    async def get_candidates_job(self, job_id):
+        data = await self._request(
+            "POST",
+            "/get-candidates-job",
+            json={"job_id": job_id}
+        )
+        print("data received:", data)
+        return [CandidateResultLong(**item) for item in data]
+    
+    
 
     # -----------------------------
     # COMPANY
