@@ -2,15 +2,13 @@ from nicegui import ui
 from niceGUI.components.comp_left_drawer import LeftDrawer
 # from niceGUI.components.comp_candidatejobs_table import CandidateJobsTable
 from niceGUI.components.comp_jobselector import JobSelector
-from niceGUI.components.comp_candidatejobs_table import CandidateJobsTable
+from niceGUI.dev.comp_candidatejobs_table_dev import CandidateJobsTable
 from backend.models import CandidateResultLong
 from niceGUI.app_state import API_client, ui_controller
 from datetime import date
 
 import json
 from backend.models import CandidateResultLong, RequirementResult
-
-
 
 
 @ui.page('/candidatejobs')
@@ -24,12 +22,6 @@ async def candidate_jobs_page():
     else:
         status_options = ui_controller.candidate_states_name_list
     
-
-    async def get_jobs_from_dir_api():
-        joblist = await API_client.get_jobs_from_directory()
-        JobList(joblist, callbacks=callbacks)
-        print("FROM API:", joblist)
-
     async def on_status_change(job_id, new_status):  #Behöver skrivas om
         ui_controller.job_id = job_id
         ui_controller.job_state = new_status
@@ -41,34 +33,37 @@ async def candidate_jobs_page():
         candidates = await API_client.reeval_new_requirements(ui_controller.job_id, new_requirements)
         return candidates
     
-    async def get_all_jobs():  #Behöver skrivas om
+    async def get_job_selector_list():  #Behöver skrivas om
         print("ska utvärdera igen")
-        jobs = await API_client.get_all_jobs()
-        job_short_list = [
-            {"job_id": job["job_id"], "title": job["title"], "customer": job["customer"]}
-            for job in jobs
-        ]
-        print("job short list", job_short_list)
-        return job_short_list
+        job_sel_list = await API_client.get_job_selector_list()
+        return job_sel_list
     
+    table_container = ui.column()  # <-- här hamnar tabellen
+
     async def display_table(job_id):
+        table_container.clear()  # 🧹 Ta bort tidigare tabell
         candidates = await API_client.get_candidates_job(job_id)
-        callbacks = { "on_status_change": on_status_change, "status_options": status_options, "on_reeval": on_reeval } 
-        print(candidates)
-        candidate_job_table = CandidateJobsTable(
-            candidates=candidates,
-            callbacks=callbacks
-        )
-    
-    job_list = await get_all_jobs()
-    
+        callbacks = {
+            "on_status_change": on_status_change,
+            "status_options": status_options,
+            "on_reeval": on_reeval,
+        }
+
+        with table_container:
+            CandidateJobsTable(
+                candidates=candidates,
+                callbacks=callbacks
+            )
+
+
+    job_list = await get_job_selector_list()
     jobselector = JobSelector(job_list, display_table)
     job_id = ui.context.client.request.query_params.get('job_id')
     if job_id:
         print("Loading job from query:", job_id)
-        await self.display_table(job_id)
+        await display_table(job_id)
         ui_controller.job_id = job_id
-    print("Job id:", job_id)
+    # print("Job id:", job_id)
     # candidates = get_test_data()
     
     

@@ -15,7 +15,6 @@ async def jobs_page():
         status_options = ui_controller.job_states_name_list
     
 
-
     async def get_jobs_from_dir_api():
         joblist = await API_client.get_jobs_from_directory()
         JobList(joblist, callbacks=callbacks)

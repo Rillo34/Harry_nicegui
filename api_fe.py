@@ -299,6 +299,13 @@ class APIController:
         print("data received:", data)
         return [CandidateResultLong(**item) for item in data]
     
+    async def get_job_selector_list(self):
+        data = await self._request(
+            "GET",
+            "/job-selector-list"
+        )
+        print("data received:", data)
+        return data
     
 
     # -----------------------------
