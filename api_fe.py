@@ -93,6 +93,9 @@ class APIController:
     # JOBS
     # -----------------------------
 
+    async def get_job(self, job_id):
+        return await self._request("GET", "/get-job", params={"job_id": job_id})
+
     async def get_all_jobs(self):
         return await self._request("GET", "/get-jobs")
 
@@ -254,6 +257,8 @@ class APIController:
     #     return ReSizeResponse(**data) if data else None
 
     async def reeval_new_requirements(self, job_id, requirements):
+        print("API reeval_new_requirements, job_id:", job_id
+              , "requirements:", requirements)
         data = await self._request(
             "POST",
             "/reeval-new-requirements",

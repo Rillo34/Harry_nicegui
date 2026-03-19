@@ -17,6 +17,7 @@ from datetime import date
 from niceGUI.api_fe import APIController, UploadController
 import json
 
+
 class CandidateJobsTable():
     def __init__(self, candidates: List[CandidateResultLong], callbacks):
         self.fictive_start_date = date(2025, 10, 1)
@@ -26,6 +27,7 @@ class CandidateJobsTable():
         self.status_options = callbacks["status_options"]
         self.on_reeval = callbacks["on_reeval"]
         self.req_changed = False
+        
         self.requirements = [
             {
                 "reqname": r.reqname,
@@ -52,7 +54,7 @@ class CandidateJobsTable():
             reqs = cand.get('requirements') or []   # <-- säkerhetskontroll
             cand_copy['musthave'] = [req for req in reqs if req['ismusthave']]
             cand_copy['desirable'] = [req for req in reqs if not req['ismusthave']]
-            cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}"
+            cand_copy['combined_score'] = round((cand_copy.get('combined_score', 0) * 100),0)
             self.candidates_list.append(cand_copy)
         
         self.original_candidates_list = self.candidates_list.copy()
@@ -300,31 +302,25 @@ class CandidateJobsTable():
         print(f"Visible columns updated: {self.visible_columns}")
 
     def update(self, new_candidates: List[CandidateResultLong]):
-        """Update the table with new candidates, refreshing data and UI."""
         self.candidates_map = {c.candidate_id: c.dict(exclude_none=True) for c in new_candidates}
         self.candidates_list = []
         for cand in self.candidates_map.values():
             cand_copy = cand.copy()
-            cand_copy['musthave'] = [req for req in cand['requirements'] if req['ismusthave']]
-            cand_copy['desirable'] = [req for req in cand['requirements'] if not req['ismusthave']]
-            cand_copy['combined_score'] = f"{cand_copy['combined_score'] * 100:.0f}%"
-            # if cand_copy.get('available_from'):
-            #     days = (cand_copy['available_from'] - self.fictive_start_date).days
-            #     cand_copy['job_availability'] = f"{days}d"
-            # else:
-            #     cand_copy['job_availability'] = "N/A"
+            # ✅ säker hantering av krav
+            cand_copy['musthave'] = [req for req in (cand.get('requirements') or []) if req.get('ismusthave')]
+            cand_copy['desirable'] = [req for req in (cand.get('requirements') or []) if not req.get('ismusthave')]
+            cand_copy['combined_score'] = round((cand_copy.get('combined_score', 0) * 100),0)
             self.candidates_list.append(cand_copy)
 
-        # print(f"Updated job_availability values: {[cand['job_availability'] for cand in self.candidates_list]}")
-        self.musthave_req_names = sorted({
+        self.musthave_req_names = sorted({  
             req["reqname"] for cand in self.candidates_list for req in cand["musthave"]
         })
         self.desirable_req_names = sorted({
             req["reqname"] for cand in self.candidates_list for req in cand["desirable"]
         })
+        
         self.filters = []
         self.search_term = ""
-
         self.table.rows = self.candidates_list
         self.table.columns = [col for col in self.columns if col["name"] in self.visible_columns + ["actions"]]
         if self.filter_section_expansion:
@@ -347,7 +343,7 @@ class CandidateJobsTable():
                         with ui.row().classes('flex-wrap gap-2'):
                             for req_name in self.musthave_req_names:
                                 ui.chip(req_name, removable=True, on_click=lambda e, rn=req_name: self._toggle_filter(rn)) \
-                                    .props(f"color={'green' if req_name in self.filters else 'grey'} outline") \
+                                    .props(f"color={'green' if req_name in self.filters else 'black'} outline") \
                                     .classes('cursor-pointer') \
                                     .on('remove', lambda rn=req_name: self._remove_filter(rn))
                                 ui.switch(on_change=lambda rn=req_name: self._toggle_req(rn))
@@ -357,7 +353,7 @@ class CandidateJobsTable():
                         with ui.row().classes('flex-wrap gap-1'):
                             for req_name in self.desirable_req_names:
                                 ui.chip(req_name, removable=True, on_click=lambda e, rn=req_name: self._toggle_filter(rn)) \
-                                    .props(f"color={'green' if req_name in self.filters else 'grey'} outline") \
+                                    .props(f"color={'green' if req_name in self.filters else 'black'} outline") \
                                     .classes('cursor-pointer') \
                                     .on('remove', lambda rn=req_name: self._remove_filter(rn))
                                 ui.switch(on_change=lambda rn=req_name: self._toggle_req(rn))
@@ -481,13 +477,16 @@ class CandidateJobsTable():
         filtered_rows = []
         for cand in self.candidates_list:
             include = True
+            reqs = cand.get("requirements") or []  # <-- fallback till tom lista
             for req_name in self.filters:
                 req_status = next(
-                    (req["status"] for req in cand["requirements"] if req["reqname"] == req_name), None
+                    (req.get("status") for req in reqs if req.get("reqname") == req_name),
+                    None
                 )
                 if req_status != "YES":
                     include = False
                     break
+
             if include and self.search_term:
                 search_match = False
                 for field in ['candidate_id', 'name', 'combined_score', 'assignment', 'location', 'years_exp', 'status', 'job_availability']:
@@ -496,11 +495,10 @@ class CandidateJobsTable():
                         break
                 if not search_match:
                     include = False
+
             if include:
                 filtered_rows.append(cand)
-        
-        # print(f"Filtered rows: {[cand['name'] for cand in filtered_rows]}")
+
         self.table.rows = filtered_rows
-        # print(self.table.rows)
         self.table.update()
 

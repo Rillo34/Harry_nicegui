@@ -15,54 +15,78 @@ from backend.models import CandidateResultLong, RequirementResult
 async def candidate_jobs_page():
     drawer = LeftDrawer()
 
+    # ✅ Hämta status-options en gång
     if not ui_controller.candidate_states_name_list: 
         states = await API_client.get_candidate_states() 
         ui_controller.set_candidate_states(states) 
-        status_options = ui_controller.candidate_states_name_list
-    else:
-        status_options = ui_controller.candidate_states_name_list
-    
-    async def on_status_change(job_id, new_status):  #Behöver skrivas om
-        ui_controller.job_id = job_id
-        ui_controller.job_state = new_status
+    status_options = ui_controller.candidate_states_name_list
+
+    # -------------------------
+    # Callbacks
+    # -------------------------
+    async def on_status_change(job_id, new_status):
+        """Uppdatera job-status via API"""
         await API_client.job_status_update(job_id, new_status)
         print(f"Status updated for job_id={job_id} to {new_status}")
-    
-    async def on_reeval(new_requirements):  #Behöver skrivas om
-        print("ska utvärdera igen")
-        candidates = await API_client.reeval_new_requirements(ui_controller.job_id, new_requirements)
+
+    async def on_reeval(job_id, new_requirements):
+        """Re-evaluera kandidater för ett jobb"""
+        print(f"Re-evaluating job {job_id}")
+        candidates = await API_client.reeval_new_requirements(job_id, new_requirements)
         return candidates
+
+    async def get_job_selector_list():
+        """Hämta listan med jobb till job-selector"""
+        return await API_client.get_job_selector_list()
+
     
-    async def get_job_selector_list():  #Behöver skrivas om
-        print("ska utvärdera igen")
-        job_sel_list = await API_client.get_job_selector_list()
-        return job_sel_list
-    
-    table_container = ui.column()  # <-- här hamnar tabellen
+    jobselector_container = ui.column()  # ligger ovanför tabellen
+    table_container = ui.column()        # här hamnar tabellen
 
     async def display_table(job_id):
-        table_container.clear()  # 🧹 Ta bort tidigare tabell
+        """Rendera tabellen för ett specifikt job_id"""
+        table_container.clear()  # ta bort tidigare tabell
         candidates = await API_client.get_candidates_job(job_id)
         callbacks = {
-            "on_status_change": on_status_change,
-            "status_options": status_options,
-            "on_reeval": on_reeval,
+            "on_status_change": lambda new_status, jid=job_id: on_status_change(jid, new_status),
+            "on_reeval": lambda new_req, jid=job_id: on_reeval(jid, new_req),
+            "status_options": status_options
         }
-
+        job_details = await API_client.get_job(job_id)
+        job_info_label1.text = (
+            f"Job: {job_details['title']} | Customer: {job_details['customer']}")
+        job_info_label2.text = f"Description: {job_details['description']}"
+        print ("Job details for job_id", job_id, ":", job_details)
+        # Rendera tabellen
         with table_container:
             CandidateJobsTable(
                 candidates=candidates,
                 callbacks=callbacks
             )
 
+    # -------------------------
+    # Job-selector
+    # -------------------------
+    with jobselector_container:
+        job_list = await get_job_selector_list()
+        with ui.row().classes("items-center gap-4"):  # rad med lite mellanrum
+            # JobSelector i vänsterkolumn
+            with ui.column().classes("flex-auto"):
+                jobselector = JobSelector(job_list, display_table)
+            
+            # Label med jobbinformation i högerkolumn
+            with ui.column().classes("flex-auto"):
+                job_info_label1 = ui.label("").classes("text-md font-semibold")
+                job_info_label2 = ui.label("").classes("text-md")
 
-    job_list = await get_job_selector_list()
-    jobselector = JobSelector(job_list, display_table)
-    job_id = ui.context.client.request.query_params.get('job_id')
-    if job_id:
-        print("Loading job from query:", job_id)
-        await display_table(job_id)
-        ui_controller.job_id = job_id
+
+    # -------------------------
+    # Direktbesök med ?job_id=...
+    # -------------------------
+    job_id_from_query = ui.context.client.request.query_params.get("job_id")
+    if job_id_from_query:
+        print("Loading job from query:", job_id_from_query)
+        await display_table(job_id_from_query)
     # print("Job id:", job_id)
     # candidates = get_test_data()
     
