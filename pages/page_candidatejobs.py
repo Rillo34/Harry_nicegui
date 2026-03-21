@@ -32,7 +32,12 @@ async def candidate_jobs_page():
     async def on_reeval(job_id, new_requirements):
         """Re-evaluera kandidater för ett jobb"""
         print(f"Re-evaluating job {job_id}")
+        spinner_label.text = "Re-evaluating candidates..."  # uppdatera spinner-label
+        spinner_label.visible = True  # visa spinner-label
+        spinner.visible = True   # visa spinner
         candidates = await API_client.reeval_new_requirements(job_id, new_requirements)
+        spinner.visible = False  # göm spinner
+        spinner_label.visible = False  # göm spinner-label
         return candidates
 
     async def get_job_selector_list():
@@ -46,7 +51,12 @@ async def candidate_jobs_page():
     async def display_table(job_id):
         """Rendera tabellen för ett specifikt job_id"""
         table_container.clear()  # ta bort tidigare tabell
+        spinner_label.text = "Loading candidates..."  # uppdatera spinner-label
+        spinner_label.visible = True  # visa spinner-label
+        spinner.visible = True   # visa spinner
         candidates = await API_client.get_candidates_job(job_id)
+        spinner.visible = False  # göm spinner
+        spinner_label.visible = False  # göm spinner-label
         callbacks = {
             "on_status_change": lambda new_status, jid=job_id: on_status_change(jid, new_status),
             "on_reeval": lambda new_req, jid=job_id: on_reeval(jid, new_req),
@@ -78,6 +88,13 @@ async def candidate_jobs_page():
             with ui.column().classes("flex-auto"):
                 job_info_label1 = ui.label("").classes("text-md font-semibold")
                 job_info_label2 = ui.label("").classes("text-md")
+                with ui.row():
+                    spinner_label = ui.label("").classes("text-md italic text-red-500")
+                    spinner_label.visible = False
+                    spinner = ui.spinner('dots', size='lg', color='red')
+                    spinner.visible = False  # göm från start
+
+
 
 
     # -------------------------
@@ -87,15 +104,4 @@ async def candidate_jobs_page():
     if job_id_from_query:
         print("Loading job from query:", job_id_from_query)
         await display_table(job_id_from_query)
-    # print("Job id:", job_id)
-    # candidates = get_test_data()
-    
-    
-
-# @ui.page('/candidatejobs')
-# async def candidate_jobs_page():
-#     drawer = LeftDrawer()
-#     print("In candidatejobs_page")
-#     candidates = get_test_data()
-#     candidate_job_table = CandidateJobsTable(API_client, candidates=candidates)
-#     # candidate_job_table = CandidateJobsTable(candidates=candidates)
+   

@@ -159,7 +159,7 @@ class CandidateJobsTable():
                                     :color="req.status === 'YES' ? 'green' : req.status === 'NO' ? 'red' : 'yellow-8'"
                                     size="sm"
                                 >
-                                    <q-tooltip>{{ req.reqname }}: {{ req.status }}</q-tooltip>
+                                    <q-tooltip class="text-lg q-pa-md">{{ req.reqname }}: {{ req.status }}</q-tooltip>
                                 </q-icon>
                             </div>
                         </template>
@@ -395,6 +395,8 @@ class CandidateJobsTable():
     async def re_evaluate(self, shortlist_size: int = 3):
         candidates = await self.on_reeval(self.requirements)
         print("nr of candidates: ", len(candidates))
+        await asyncio.sleep(0.1)
+        self.filter_section_expansion.value = False
         self.update(candidates)
         self.req_changed = False
         self.orig_requirements = copy.deepcopy(self.requirements)
