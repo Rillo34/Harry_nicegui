@@ -17,14 +17,18 @@ from backend.models import ContractRequest, ContractAllocation
 import holidays
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
-
-ui.add_css("""
-.summary-row {
-    background-color: #e0f2fe;
-    font-weight: bold;
-    border-top: 2px solid #2563eb;
+ui.add_head_html("""
+<style>
+.q-table__tr.summary-row {
+    background-color: #e3f2fd !important;  /* ljusblå */
+    font-weight: 700 !important;
 }
+.q-table__tr.summary-row td {
+    background-color: inherit !important;
+}
+</style>
 """)
+
 ui.add_head_html('''
     <script>
         function getColorClass(val) {
@@ -50,10 +54,11 @@ class DataTable:
         self.alloc_table = alloc_table
         self.table = None
         callbacks = callbacks or {}
-        self.add_allocation = callbacks.get("add_allocation")
-        self.delete_allocation = callbacks.get("delete_allocation")
-        self.change_alloc = callbacks.get("change_alloc")
+        self.add_alloc= callbacks.get("add_alloc")
         self.change_cell_alloc = callbacks.get("change_cell_alloc")
+        self.delete_allocation = callbacks.get("delete_row")
+        self.change_alloc = callbacks.get("change_alloc")
+        self.add_alloc = callbacks.get("add_alloc")
         self.group_mode = "None"
         self.enable_buttons = True
         self.selected_rows = []
@@ -110,56 +115,55 @@ class DataTable:
                 self.add_filter()
 
         df = df.round(1)
+        df = df.reset_index(drop=True)
         rows = df.to_dict(orient='records')
         rows = self._format_rows(rows)
         rows.insert(0, self.summary_row)
+        # ... tidigare kod ...
+
         if self.perc_table:
             selection_mode = 'multiple'
-            print("perc table - multiple selection")
-        elif self.is_summary ==  True and not self.alloc_table:
+        elif self.is_summary == True and not self.alloc_table:
             selection_mode = 'multiple'
         else:
-            selection_mode = 'none'
+            selection_mode = 'single'  # eller 'none'
 
-        if selection_mode == 'multiple':
-            columns = [{'name': 'selection', 'label': '', 'field': 'selection', 'sortable': False}] + [
-                {'name': c, 'label': c, 'field': c, 'sortable': True}
-                for c in self.visible_columns
-            ]
-        else:
-            columns = [
-                {'name': c, 'label': c, 'field': c, 'sortable': True}
-                for c in self.visible_columns
-            ]
+        columns = [{'name': 'selection', 'label': '', 'field': 'selection', 'sortable': False}] + [
+            {'name': c, 'label': c, 'field': c, 'sortable': True}
+            for c in self.visible_columns]
 
         with ui.card().classes('w-full') as container:
-            container.style('height: 700px;')  # eller 1000px, vad du vill
+            container.style('height: 700px;')
 
             self.table = ui.table(
                 columns=columns,
                 rows=rows,
-                row_key= "id", 
+                row_key="id",
                 selection=selection_mode,
                 pagination={"rowsPerPage": 20}
             ).props('dense').classes('w-full no-wrap sticky-header')
+
             self.table.on('cell-edit', self._on_cell_edit)
+            self.table.on_select(self.update_selected_row)  # eller ditt lambda-notify
 
-        self.table.style('height: 100%; overflow-y: auto; overflow-x: auto;')
-        self.table.on('selection', self.update_selected_row)
+            # Fixa cell-klick utan att störa selection
+            for col in self.month_cols:
+                self.table.add_slot(f"body-cell-{col}", f"""
+                    <q-td :props="props" class="cursor-pointer"
+                        @click.stop="$parent.$emit('cell-click', {{row: props.row, col: '{col}'}})">
+                        {{{{ props.row['{col}'] }}}}
+                    </q-td>
+                """)
 
-        if selection_mode == 'multiple':
-            self.table.add_slot('header-selection', r'''
-                <q-th auto-width>
-                    <q-checkbox v-model="props.selected" />
-                </q-th>
-            ''')
-        for col in self.month_cols:
-            self.table.add_slot(f"body-cell-{col}", f"""
-                <q-td :props="props" class="cursor-pointer"
-                    @click="() => $parent.$emit('cell-click', {{row: props.row, col: '{col}'}})">
-                    {{{{ props.row['{col}'] }}}}
-                </q-td>
-            """)
+            # Valfrir "select all" checkbox i header (bra för multiple)
+            if selection_mode == 'multiple':
+                self.table.add_slot('header-selection', r'''
+                    <q-th auto-width>
+                        <q-checkbox dense v-model="props.selected" @click.stop="props.selectAll(false)" />
+                    </q-th>
+                ''')
+
+        # ... resten av din kod ...
         
         self.table.on("cell-click", lambda e: self.open_edit_dialog(e.args["row"], e.args["col"]))
         
@@ -175,14 +179,14 @@ class DataTable:
                 if isinstance(val, (int, float)):
                     if val == 0:
                         row[col] = ""
-                    # elif self.perc_table:
-                    #     row[col] = f"{int(val)}%"
+                    elif self.perc_table:
+                        row[col] = f"{int(round(val * 100))}%"
                            
         for col in self.month_cols:         # --- for the summary row
             if self.perc_table:
                 val = self.summary_row.get(col) 
-                # if isinstance(val, (int, float)): 
-                #     self.summary_row[col] = f"{int(val)}%" 
+                if isinstance(val, (int, float)): 
+                    self.summary_row[col] = f"{int(round(val * 100))}%" 
         return rows
     
     
@@ -311,11 +315,13 @@ class DataTable:
             for col in self.df_latest.columns:
                 summary[col] = ''
         else:
-            for col in self.df_latest.columns:
+            for col in self.filtered_df.columns:
                 if col in self.month_cols:
-                    summary[col] = round(self.df_latest[col].sum(), 1)
+                    summary[col] = round(self.filtered_df[col].sum(), 1)
                 else:
                     summary[col] = ''
+            summary["contract id"] = "Total"  # eller "Summary"
+        summary["id"] = "summary"  # Viktigt för att inte kollidera med riktiga rader
         self.summary_row = summary
 
     def update_selected_row(self, e):
@@ -351,67 +357,5 @@ class DataTable:
         print("ska minska row")
         await self.change_alloc(self.selected_rows, up_alloc = False)
     
-    def add_alloc(self):
-        print("ska lägga till alloc:")
-
-        with ui.dialog() as dialog:
-            with ui.card().classes("p-4"):   # <-- VIKTIG
-                ui.label("Add new allocation")
-
-                contract_list = sorted(self.df['contract_id'].unique().tolist())
-                all_contracts = contract_list
-                all_candidates = sorted(self.df['candidate_id'].dropna().unique().tolist())
-
-                def get_candidates_for_contract(contract_id):
-                    used = set(self.df[self.df['contract_id'] == contract_id]['candidate_id'].dropna())
-                    print("used candidates for contract", contract_id, ":", used)
-                    return [c for c in all_candidates if c not in used]
-
-                def update_candidate_select(contract_id):
-                    candidates = get_candidates_for_contract(contract_id)
-                    candidate_select.options = candidates
-                    candidate_select.value = None
-                    candidate_select.update()
-
-                contract_select = ui.select(
-                    options=all_contracts,
-                    label="Contract id",
-                    value=contract_list[0] if contract_list else None,
-                    on_change=lambda e: update_candidate_select(e.value)
-                ).classes("w-48")
-
-                candidate_select = ui.select(
-                    options=get_candidates_for_contract(contract_select.value) if contract_select.value else [],
-                    multiple=True,
-                    value=None,
-                    clearable=True,
-                    on_change=lambda e: ui.notify(f"Selected candidates: {e.value}. Contract = {contract_select.value}"),
-                    label="Candidates to add:"
-                ).classes("w-72") 
-
-                alloc_percent = ui.number(
-                    "Alloc_percent",
-                    format="%.1f",
-                    step=0.1,
-                    value=0.5,
-                    min=0,
-                    max=1
-                ).classes("w-72")
-
-                with ui.row():
-                    ui.button("Cancel", on_click=dialog.close)
-                    async def _on_save(e):
-                        await self.add_allocation(  # skicka payload till funktionen
-                            {
-                                "contract_id": contract_select.value,
-                                "candidate_ids": candidate_select.value,
-                                "allocation_percent": alloc_percent.value
-                            }
-                        )
-                        dialog.close()
-
-                    ui.button("Save", on_click=_on_save).classes("bg-blue-500 text-white")
-        dialog.open()
-           
 
 

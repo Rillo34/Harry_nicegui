@@ -1,3 +1,4 @@
+from fastapi import params
 import nicegui
 import json
 import requests
@@ -128,7 +129,7 @@ class APIController:
     async def get_allocations_perc_and_hours(self):
         return await self._request("GET", "/get-allocations-table-perc-and-hours")
     
-    async def get_working_hours(self):
+    async def get_workinghour_table(self):
         return await self._request("GET", "/get-workinghour-table")
     
     async def delete_allocation(self, allocation_list):
@@ -182,10 +183,24 @@ class APIController:
         print("Payload for add_allocation_to_contract_allocation:", payload)
         return await self._request("POST", "/add-allocation", json=payload)
 
+    async def get_total_net_capacity(self):
+        return await self._request("GET", "/get-total-net-capacity")
+
+    async def get_abscence(self):
+        return await self._request("GET", "/get-abscence")
+
+    async def update_or_add_abscence(self, data):
+        print("API update_or_add_abscence, data:", data)
+        return await self._request("POST", "/update-or-add-abscence", json=data)
+
+    async def delete_abscence(self, abscence_id):
+        print("API delete_abscence, abscence_id:", abscence_id)
+        return await self._request("DELETE", f"/delete-abscence/{abscence_id}")
+
     # -----------------------------
     # AVAILABILITY
     # -----------------------------
-
+    
     async def get_availability(self, contract_id):
         return await self._request(
             "GET",
@@ -287,7 +302,10 @@ class APIController:
     
     async def get_all_candidates(self):
         data = await self._request("GET", "/get-all-candidates")
-        print(data)
+        return data
+    
+    async def get_internal_candidates(self):
+        data = await self._request("GET", "/get-internal-candidates")
         return data
 
 
