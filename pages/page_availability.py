@@ -1,53 +1,98 @@
 from gc import callbacks
+from dataclasses import dataclass
+from typing import List, Dict, Any
 from nicegui import ui
+from pyparsing import Any, Dict
 from niceGUI.components.comp_left_drawer import LeftDrawer
 from niceGUI.app_state import API_client, ui_controller
 from niceGUI.components.comp_cons_avail import DataTable
+# from niceGUI.components.comp_cons_avail import DataTable2
 from niceGUI.components.comp_abscence_table import AbsenceTable
 import pandas as pd
 from tabulate import tabulate
 import random
 
+from dataclasses import dataclass
+
+# @dataclass
+# class TableConfig:
+#     hidden_columns: List[str] = None
+#     is_summary: bool = False
+#     alloc_table: bool = False
+#     perc_table: bool = False
+#     callbacks: Dict[str, Any] = None
+#     top_rows: Dict[str, Dict[str, float]] = None
 
 @ui.page('/availability')
 async def availability_page():
     drawer = LeftDrawer()
     ui.label("Availability Page")
+    candidates = await API_client.get_internal_candidates()
+    working_hours_df = pd.DataFrame(await API_client.get_workinghour_table())
+    vacations = await API_client.get_abscence()
+
+
     contract_table, hidden_cols = await API_client.get_contracts_table()
     contract_df = pd.DataFrame(contract_table)
     allocation_tables = await API_client.get_allocations_perc_and_hours()
     allocation_df_perc = pd.DataFrame(allocation_tables["allocation_perc"])
     allocation_df_orig = allocation_df_perc.copy()
     allocation_df_hours = pd.DataFrame(allocation_tables["allocation_hours"]).round(0)
-    working_hours_df = pd.DataFrame(await API_client.get_workinghour_table())
-    candidates = await API_client.get_internal_candidates()
     candidate_name_list = {c["candidate_id"]: c["name"] for c in candidates}
     month_list = [col for col in contract_df.columns if col.startswith("202")]
-    vacations = await API_client.get_abscence()
+    total_capacity_and_average = await API_client.get_total_capacity_and_average()
+    capacity_dict = total_capacity_and_average["capacity"]
+    utilisation_dict = total_capacity_and_average["average"]
+    top_rows = {
+        "capacity": capacity_dict,
+        "utilisation": utilisation_dict
+    }
+
     print("candidate_name_list:", candidate_name_list)
-    print("month_list:", month_list)
 
-           
-    async def delete_row (self):
-        print("ska deleta rows:", self.selected_rows)
-        await self.delete_allocation (self.selected_rows)
     
-    async def inc_alloc(self):
-        print("ska öka rows")
-        await self.change_alloc(self.selected_rows, up_alloc = True)
-
-    async def change_cell_alloc(self, row, col, new_value):
-        print("ska ändra en cell")
-        await self.change_cell_alloc(row, col, new_value)
-
+    async def delete_row (rows):
+        print("ska deleta rows:", rows)
+        await API_client.delete_allocations(rows)
+    
+    async def change_alloc(rows, step):  
+        print("ska ändra rows:", rows, "med step:", step)
+        change = step
+        change_list = [
+                {
+                    "contract_id": row.get("contract_id"),
+                    "candidate_id": row.get("candidate_id"),
+                    "change": change
+                }
+                for row in rows
+        ] 
+        print ("change list i page_availability:", change_list)
+        await API_client.change_allocation(change_list)
+    
     async def dec_alloc (self):
         print("ska minska row")
-        await self.change_alloc(self.selected_rows, up_alloc = False)
+        await API_client.change_alloc(self.selected_rows, up_alloc = False)
+
+    async def change_cell_alloc(row, col, new_value):
+        print("ska ändra en cell")
+        change_list = [
+                {
+                    "contract_id": row.get("contract_id"),
+                    "candidate_id": row.get("candidate_id"),
+                    "month": col,
+                    "new_value": new_value
+                }
+            ]
+        print ("change list i page_availability:", change_list)
+        await API_client.change_cell_alloc(change_list=change_list)
+
+    
 
     async def add_alloc(self):
         print("ska lägga till alloc:")
         # Här kan du implementera logiken för att lägga till en ny allocation, t.ex. öppna en dialog för att samla in nödvändig information och sedan skicka den till backend.
     
+
     async def update_or_add_abscence(data):  #Function takes CandidateAway object as input
         print("ska uppdatera abscence:")
         data_dict = data.model_dump()  # Convert CandidateAway object to dictionary
@@ -63,8 +108,7 @@ async def availability_page():
 
     callbacks_alloc = {
         "delete_row": delete_row,
-        "inc_alloc": inc_alloc,
-        "dec_alloc": dec_alloc,
+        "change_alloc": change_alloc,
         "change_cell_alloc": change_cell_alloc,
         "add_alloc": add_alloc
     }
@@ -80,12 +124,12 @@ async def availability_page():
             contract_tab = ui.tab('Contracts')
             working_days_tab = ui.tab('Working days')
             abscence_tab = ui.tab('Abscence')
-        with ui.tab_panels(tabs, value=contract_tab).classes('w-full'):
+        with ui.tab_panels(tabs, value=allocation_perc_tab).classes('w-full'):
             
             with ui.tab_panel(allocation_perc_tab):
                 ui.label("Allocation %").classes("text-lg font-bold mb-2")
                 with ui.row().classes('w-full'):
-                    allocation_table = DataTable(allocation_df_perc, hidden_columns=hidden_cols, is_summary=True,alloc_table=True, perc_table=True, callbacks=callbacks_alloc)   
+                    allocation_perc_table = DataTable(allocation_df_perc, hidden_columns=hidden_cols, is_summary=True, alloc_table=True, perc_table=True, top_rows=top_rows, callbacks=callbacks_alloc)   
             with ui.tab_panel(allocation_hour_tab):
                 ui.label("Allocation hours").classes("text-lg font-bold mb-2")
                 with ui.row().classes('w-full'):

@@ -44,7 +44,7 @@ ui.add_head_html('''
 
 
 class DataTable:
-    def __init__(self, df: pd.DataFrame, title="Table", hidden_columns: List[str] = None, is_summary=False, alloc_table = False, perc_table = False, callbacks = None):
+    def __init__(self, df: pd.DataFrame, title="Table", hidden_columns: List[str] = None, is_summary=False, alloc_table = False, perc_table = False, callbacks = None, top_rows = None  ):
         self.original_df = df.copy()
         self.df = df
         self.df_latest = df.copy()
@@ -54,11 +54,12 @@ class DataTable:
         self.alloc_table = alloc_table
         self.table = None
         callbacks = callbacks or {}
+        self.change_step = 0.1
         self.add_alloc= callbacks.get("add_alloc")
         self.change_cell_alloc = callbacks.get("change_cell_alloc")
         self.delete_allocation = callbacks.get("delete_row")
-        self.change_alloc = callbacks.get("change_alloc")
-        self.add_alloc = callbacks.get("add_alloc")
+        self.change_step_alloc = callbacks.get("change_alloc")
+        print("top rows in init", top_rows)
         self.group_mode = "None"
         self.enable_buttons = True
         self.selected_rows = []
@@ -71,10 +72,36 @@ class DataTable:
         self.summary_row = {}
         if self.is_summary:
             self.add_summary_row()
+        self.top_rows = []    
+        if top_rows:
+            self.capacity_dict = top_rows.get("capacity", {})
+            self.average_dict = top_rows.get("utilisation", {})
+            self.add_top_rows()
         self.render()   
+        print("self top ", self.top_rows)
      
 
+# -----------------------------
+# API CALLS
+# -----------------------------
+
+    async def delete_row (self):
+        print("ska deleta rows:", self.selected_rows)
+        if self.selected_rows:
+            await self.delete_allocation (self.selected_rows)
+        else:
+            ui.notify("No rows selected for deletion", color="red")
     
+    async def change_alloc(self, step):
+        print("ska ändra row:s:", self.selected_rows, "med step:", step)
+        if not self.selected_rows:
+            ui.notify("No rows selected for changing allocation", color="red")
+            return
+        await self.change_step_alloc(self.selected_rows, step=step)
+
+    async def change_cell_alloc(self, row, col, new_value):
+        print("ska ändra en cell", row, col, new_value)
+        await self.change_cell_alloc(row, col, new_value)
 
 # -----------------------------
 # RENDER AND UPDATE
@@ -87,7 +114,8 @@ class DataTable:
         
         if self.is_summary:
             self.add_summary_row()
-            self.table.rows.insert(0, self.summary_row) # 4. Uppdatera UI igen
+
+            self.table.rows = [self.summary_row] + self.top_rows + self.table.rows  # 4. Uppdatera UI igen
             self._format_rows(self.table.rows)
             self.table.update() 
 
@@ -103,8 +131,8 @@ class DataTable:
                 ).props('dense').classes("mr-4")
             if self.perc_table:
                 delete_button = ui.button(icon = 'delete', text = "Delete", color ='red', on_click = self.delete_row).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
-                inc_button = ui.button(text = "add 10%", icon="arrow_upward", color ='grey', on_click = self.inc_alloc).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
-                dec_button = ui.button(text = "sub 10%", icon="arrow_downward",  color = 'grey', on_click = self.dec_alloc).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
+                inc_button = ui.button(text = "add 10%", icon="arrow_upward", color ='grey', on_click = lambda e: self.change_alloc(self.change_step)).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
+                dec_button = ui.button(text = "sub 10%", icon="arrow_downward",  color = 'grey', on_click = lambda e: self.change_alloc(-self.change_step)).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
                 add_button = ui.button(text = "Add allocation", icon="add", color = 'blue', on_click = self.add_alloc).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
 
                 ui.space()
@@ -118,7 +146,7 @@ class DataTable:
         df = df.reset_index(drop=True)
         rows = df.to_dict(orient='records')
         rows = self._format_rows(rows)
-        rows.insert(0, self.summary_row)
+        rows = [self.summary_row] + self.top_rows + rows
         # ... tidigare kod ...
 
         if self.perc_table:
@@ -148,12 +176,26 @@ class DataTable:
 
             # Fixa cell-klick utan att störa selection
             for col in self.month_cols:
-                self.table.add_slot(f"body-cell-{col}", f"""
-                    <q-td :props="props" class="cursor-pointer"
-                        @click.stop="$parent.$emit('cell-click', {{row: props.row, col: '{col}'}})">
-                        {{{{ props.row['{col}'] }}}}
+                # self.table.add_slot(f"body-cell-{col}", f"""
+                #     <q-td :props="props" class="cursor-pointer"
+                #         @click.stop="$parent.$emit('cell-click', {{row: props.row, col: '{col}'}})">
+                #         {{{{ props.row['{col}'] }}}}
+                #     </q-td>
+                # """)
+                # self.table.add_slot(f"body-cell-{col}", f"""
+                #     <q-td :props="props" class="cursor-pointer bg-red-100"
+                #         @click.stop="$emit('cell-click', {{row: props.row, col: '{col}'}}); $q.notify('Klick på {col}!!!')">
+                #         {{{{ props.value }}}}   <!-- ← props.value är oftast snyggare än props.row[col] -->
+                #     </q-td>
+                # """)
+                
+                col_str = str(col)
+                self.table.add_slot(f'body-cell-{col_str}', f'''
+                    <q-td :props="props" class="cursor-pointer" 
+                        @click="$parent.$emit('cell-click', {{ row: props.row, col: '{col_str}' }})">
+                        {{{{ props.value }}}}
                     </q-td>
-                """)
+                ''')
 
             # Valfrir "select all" checkbox i header (bra för multiple)
             if selection_mode == 'multiple':
@@ -165,29 +207,34 @@ class DataTable:
 
         # ... resten av din kod ...
         
-        self.table.on("cell-click", lambda e: self.open_edit_dialog(e.args["row"], e.args["col"]))
+        # self.table.on("cell-click", lambda e: self.open_edit_dialog(e.args["row"], e.args["col"]))
+        # self.table.on("cell-click", lambda e: ui.notify(f"Klick på cell i kolumn {e.args['col']} för kontrakt {e.args['row']['contract_id']}"))  # Temporär notis för att testa cell-click
+        # Nu körs notisen VARJE gång eventet triggas
+        # Nu skickar vi vidare den data vi just såg i notisen till din dialog-funktion
+        self.table.on('cell-click', lambda e: self.open_edit_dialog(e.args['row'], e.args['col'])) # Lyssna på custom eventet och visa notis
         
 # -----------------------------
 # FILTER AND GROUPING
 # -----------------------------
-
-    def _format_rows(self, rows):           # --- If it is a perc_table
-        """Format only UI rows, never the DataFrame."""
-        for row in rows:                    # --- For the table
+    def _format_rows(self, rows):
+        formatted_rows = []
+        # Filtrera bort specialrader direkt
+        target_rows = [r for r in rows if r.get("id") not in ["summary", "summary_capacity", "summary_average"]]
+        for row in target_rows:
+            new_row = dict(row)  # Skapa kopia för att undvika referensproblem
             for col in self.month_cols:
-                val = row[col]
-                if isinstance(val, (int, float)):
+                val = new_row.get(col, 0)
+                # Hantera None/NaN (viktigt för att emitEvent ska fungera)
+                if val is None or (isinstance(val, float) and str(val) == 'nan'):
+                    new_row[col] = ""
+                elif isinstance(val, (int, float)):
                     if val == 0:
-                        row[col] = ""
+                        new_row[col] = ""
                     elif self.perc_table:
-                        row[col] = f"{int(round(val * 100))}%"
-                           
-        for col in self.month_cols:         # --- for the summary row
-            if self.perc_table:
-                val = self.summary_row.get(col) 
-                if isinstance(val, (int, float)): 
-                    self.summary_row[col] = f"{int(round(val * 100))}%" 
-        return rows
+                        new_row[col] = f"{int(round(val * 100))}%"
+                # Om värdet redan är en sträng behålls det som det är
+            formatted_rows.append(new_row)
+        return formatted_rows
     
     
     def change_radio(self, e): 
@@ -217,6 +264,7 @@ class DataTable:
                 .agg(
                     {
                         "candidate_id": lambda x: ", ".join(sorted(set(x))),
+                        "description": "first",
                         **{m: "sum" for m in self.month_cols},
                     }
                 )
@@ -232,31 +280,42 @@ class DataTable:
         ui.notify(f"Saving value {data['value']} for contract {data['contract_id']}, candidate {data['candidate_id']}, month {data['month']}")
 
 
-    def open_edit_dialog(self, row, col): 
+
+    def open_edit_dialog(self, row, col):
         print(f"Opening edit dialog for row: {row}, column: {col}")
-        async def save_edit(e):
+        try:
+            real_value = self.df_latest.loc[self.df_latest['id'] == row['id'], col].values[0]
+            print(f"Real value from DF for contract_id {row['contract_id']}, candidate_id {row['candidate_id']}, month {col}: {real_value}")
+            if pd.isna(real_value):
+                initial_value = 0.0
+            else:
+                initial_value = float(real_value)
+        except Exception as e:
+            print(f"Kunde inte hitta värde i DF: {e}")
+            initial_value = 0.0
+
+        async def save_edit():
             new_value = self.edit_value.value
-            self.current_row[self.current_col] = new_value
-            print(f"row: {self.current_row}")
             edit_dialog.close()
-            await self.change_cell_alloc(self.current_row, self.current_col, new_value)
+            await self.change_cell_alloc(row, col, new_value)
+
         with ui.dialog() as edit_dialog, ui.card():
             ui.label(f"Edit {col} allocation")
-            ui.label(f"Current value: {row[col]}")
+            # Här skickar vi in initial_value (som nu är en ren float från DF)
             self.edit_value = ui.number(
-                "Värde",
-                format="%.1f",
-                step=0.1,
+                "Värde (0.0 - 1.0)",
+                format="%.2f",
+                value=initial_value, 
+                step=0.05,
                 min=0,
                 max=1
-            )
-            ui.button("Save", on_click=save_edit)
-            ui.button("Cancel", on_click=edit_dialog.close)
-        self.current_row = row
-        self.current_col = col
-        self.edit_value.value = row[col]
-        edit_dialog.open()
+            ).classes('w-full')
+            
+            with ui.row():
+                ui.button("Save", on_click=save_edit)
+                ui.button("Cancel", on_click=edit_dialog.close).props('flat')
 
+        edit_dialog.open()
 
     def add_filter(self, fields_to_search=None):
         with self.filter_container:
@@ -324,6 +383,36 @@ class DataTable:
         summary["id"] = "summary"  # Viktigt för att inte kollidera med riktiga rader
         self.summary_row = summary
 
+    def add_top_rows(self):
+        self.top_rows = []
+
+        # --- CAPACITY ---
+        capacity = {}
+        print("Adding capacity row with dict:", self.capacity_dict)
+        for col in self.filtered_df.columns:
+            if col in self.month_cols:
+                capacity[col] = self.capacity_dict.get(col, '')
+            else:
+                capacity[col] = ''
+        capacity["contract_id"] = "Capacity"
+        capacity["id"] = "summary_capacity"
+        self.top_rows.append(capacity)
+        # --- AVERAGE ---
+        avg = {}
+        print("Adding average row with dict:", self.average_dict)
+        for col in self.filtered_df.columns:
+            if col in self.month_cols:
+                # avg[col] = round(self.average_dict.get(col, 0), 2)
+                # eller procent:
+                avg[col] = f"{self.average_dict.get(col, 0) * 100:.0f}%"
+            else:
+                avg[col] = ''
+        avg["contract_id"] = "Average"
+        avg["id"] = "summary_average"
+        print("Average row to add:", avg)
+        self.top_rows.append(avg)
+        print("Top rows after adding average:", self.top_rows)
+
     def update_selected_row(self, e):
         selected_rows = self.table.selected
         print("Selected rows:", selected_rows)
@@ -336,26 +425,9 @@ class DataTable:
         print("Rader valda:", self.selected_rows)
 
         
-# -----------------------------
-# API CALLS
-# -----------------------------
 
-
-    async def delete_row (self):
-        print("ska deleta rows:", self.selected_rows)
-        await self.delete_allocation (self.selected_rows)
     
-    async def inc_alloc(self):
-        print("ska öka rows")
-        await self.change_alloc(self.selected_rows, up_alloc = True)
 
-    async def change_cell_alloc(self, row, col, new_value):
-        print("ska ändra en cell")
-        await self.change_cell_alloc(row, col, new_value)
-
-    async def dec_alloc (self):
-        print("ska minska row")
-        await self.change_alloc(self.selected_rows, up_alloc = False)
     
 
 

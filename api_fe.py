@@ -65,30 +65,6 @@ class APIController:
             ui.notify(f'Nätverksfel: {e}', type='warning')
             return None
     
-    async def _requestOLD(self, method, endpoint, *, params=None, json=None, files=None, timeout=30):
-        url = f"{self.BASE}{endpoint}"
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.request(
-                    method=method,
-                    url=url,
-                    params=params,
-                    json=json,
-                    files=files,
-                )
-
-            if response.status_code == 200:
-                return response.json()
-            else:
-                ui.notify(f'Backend error {response.status_code}', type='warning')
-                return None
-
-        except Exception as e:
-            ui.notify(f'Nätverksfel: {e}', type='warning')
-            return None
-
-    def _parse_list(self, data, model):
-        return [model(**item) for item in data] if data else []
 
     # -----------------------------
     # JOBS
@@ -132,8 +108,8 @@ class APIController:
     async def get_workinghour_table(self):
         return await self._request("GET", "/get-workinghour-table")
     
-    async def delete_allocation(self, allocation_list):
-        print("API   delete_allocation, allocation_list:", allocation_list)
+    async def delete_allocations(self, allocation_list):
+        print("API   delete_allocations, allocation_list:", allocation_list)
         payload = [
             ContractAllocationRequest(
                 contract_id=item["contract_id"],
@@ -168,6 +144,7 @@ class APIController:
         ]
         return await self._request("PATCH", "/change-cell-allocation", json=payload)
 
+
     async def add_allocation_to_contract(self, allocation_list):
         print("API add_allocation_to_contract_allocation, allocation_list:", allocation_list)
 
@@ -183,8 +160,8 @@ class APIController:
         print("Payload for add_allocation_to_contract_allocation:", payload)
         return await self._request("POST", "/add-allocation", json=payload)
 
-    async def get_total_net_capacity(self):
-        return await self._request("GET", "/get-total-net-capacity")
+    async def get_total_capacity_and_average(self):
+        return await self._request("GET", "/get-total-capacity-and-average")
 
     async def get_abscence(self):
         return await self._request("GET", "/get-abscence")
