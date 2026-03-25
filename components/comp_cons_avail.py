@@ -1,5 +1,7 @@
 # data_table.py
+from tkinter import dialog
 from tracemalloc import start
+from nicegui import events
 import pandas as pd
 import matplotlib.pyplot as plt
 from nicegui import ui
@@ -17,36 +19,15 @@ from backend.models import ContractRequest, ContractAllocation
 import holidays
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
-ui.add_head_html("""
-<style>
-.q-table__tr.summary-row {
-    background-color: #e3f2fd !important;  /* ljusblå */
-    font-weight: 700 !important;
-}
-.q-table__tr.summary-row td {
-    background-color: inherit !important;
-}
-</style>
-""")
-
-ui.add_head_html('''
-    <script>
-        function getColorClass(val) {
-            if (val === null || isNaN(val)) return '';
-            if (val <= 0.2) return 'bg-green-100 text-green-800';
-            if (val <= 0.5) return 'bg-yellow-100 text-yellow-800';
-            if (val <= 0.8) return 'bg-orange-100 text-orange-800';
-            return 'bg-red-100 text-red-800';  // > 0.8 → rött
-        }
-    </script>
-''')
 
 
 
 class DataTable:
-    def __init__(self, df: pd.DataFrame, title="Table", hidden_columns: List[str] = None, is_summary=False, alloc_table = False, perc_table = False, callbacks = None, top_rows = None  ):
+    def __init__(self, df: pd.DataFrame, title="Table", hidden_columns: List[str] = None, is_summary=False, alloc_table = False, 
+                 perc_table = False, callbacks = None, top_rows = None):
         self.original_df = df.copy()
         self.df = df
+        self.name_list = []
         self.df_latest = df.copy()
         self.filtered_df = df
         self.title = title
@@ -55,10 +36,11 @@ class DataTable:
         self.table = None
         callbacks = callbacks or {}
         self.change_step = 0.1
-        self.add_alloc= callbacks.get("add_alloc")
+        self.add_allocation= callbacks.get("add_alloc")
         self.change_cell_alloc = callbacks.get("change_cell_alloc")
         self.delete_allocation = callbacks.get("delete_row")
         self.change_step_alloc = callbacks.get("change_alloc")
+        self.get_dialog_data = callbacks.get("get_dialog_data")
         print("top rows in init", top_rows)
         self.group_mode = "None"
         self.enable_buttons = True
@@ -103,21 +85,68 @@ class DataTable:
         print("ska ändra en cell", row, col, new_value)
         await self.change_cell_alloc(row, col, new_value)
 
+    async def add_alloc(self):
+        print("ska lägga till allocation")
+        if not self.selected_rows:
+            ui.notify("No rows selected for adding allocation", color="red")
+            return
+        if len(self.selected_rows) > 1:
+            ui.notify("Please select only one row to copy/add allocation", color="red")
+            return
+        row = self.selected_rows
+        name_list= await self.get_dialog_data(row)
+        current_contract = row[0]['contract_id']
+        with ui.dialog() as dialog:
+            async def save_and_close():
+                await self.add_allocation(
+                    row,
+                    candidate_select.value,
+                    percent_input.value,
+                )
+                dialog.close()
+            with ui.card().classes('p-4 w-96'):
+                ui.label(f"Adding allocation to contract {current_contract}").classes("text-lg font-bold mb-4")
+                candidate_select = ui.select(
+                    options=name_list,
+                    label="Candidate",
+                    multiple=True
+                ).classes("w-full")
+                percent_input = ui.number(
+                    label="Percent",
+                    format="%.1f",
+                    step=5,
+                    value=50,
+                    min=0,
+                    max=100
+                ).classes("w-full")
+                with ui.row().classes("justify-end mt-4"):
+                    ui.button("Cancel", on_click=dialog.close)
+                    ui.button("Save", on_click=lambda: save_and_close()).classes("bg-blue-500 text-white")
+        dialog.open()
+    
+
 # -----------------------------
 # RENDER AND UPDATE
 # -----------------------------
 
-    def update(self, new_df: pd.DataFrame, group_by = False):
+    def update(self, new_df: pd.DataFrame, top_rows=None, group_by = False):
         self.table.update_from_pandas(new_df)
-        if not group_by:
-            self.df_latest = new_df
-        
+        if top_rows:
+            self.capacity_dict = top_rows.get("capacity", {})
+            self.average_dict = top_rows.get("utilisation", {})
+            self.add_top_rows()
         if self.is_summary:
             self.add_summary_row()
+            self.filtered_df = new_df.copy()
+            self.table.rows = [self.summary_row] + self.top_rows + self._format_rows(self.filtered_df.to_dict(orient='records'))  # 3. Uppdatera UI med både summary och top rows
+            self.table.update()
+            return
+        
+        
+        filtered = self._format_rows(filtered)
+        self.table.rows = filtered
+        self.table.update()
 
-            self.table.rows = [self.summary_row] + self.top_rows + self.table.rows  # 4. Uppdatera UI igen
-            self._format_rows(self.table.rows)
-            self.table.update() 
 
     def render(self):
         df = self.df.copy()
@@ -133,7 +162,7 @@ class DataTable:
                 delete_button = ui.button(icon = 'delete', text = "Delete", color ='red', on_click = self.delete_row).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
                 inc_button = ui.button(text = "add 10%", icon="arrow_upward", color ='grey', on_click = lambda e: self.change_alloc(self.change_step)).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
                 dec_button = ui.button(text = "sub 10%", icon="arrow_downward",  color = 'grey', on_click = lambda e: self.change_alloc(-self.change_step)).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
-                add_button = ui.button(text = "Add allocation", icon="add", color = 'blue', on_click = self.add_alloc).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
+                add_button = ui.button(text = "Copy/add allocation", icon="add", color = 'blue', on_click = self.add_alloc).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
 
                 ui.space()
             
@@ -174,6 +203,7 @@ class DataTable:
             self.table.on('cell-edit', self._on_cell_edit)
             self.table.on_select(self.update_selected_row)  # eller ditt lambda-notify
 
+
             # Fixa cell-klick utan att störa selection
             for col in self.month_cols:
                 # self.table.add_slot(f"body-cell-{col}", f"""
@@ -196,6 +226,7 @@ class DataTable:
                         {{{{ props.value }}}}
                     </q-td>
                 ''')
+             
 
             # Valfrir "select all" checkbox i header (bra för multiple)
             if selection_mode == 'multiple':
@@ -204,13 +235,6 @@ class DataTable:
                         <q-checkbox dense v-model="props.selected" @click.stop="props.selectAll(false)" />
                     </q-th>
                 ''')
-
-        # ... resten av din kod ...
-        
-        # self.table.on("cell-click", lambda e: self.open_edit_dialog(e.args["row"], e.args["col"]))
-        # self.table.on("cell-click", lambda e: ui.notify(f"Klick på cell i kolumn {e.args['col']} för kontrakt {e.args['row']['contract_id']}"))  # Temporär notis för att testa cell-click
-        # Nu körs notisen VARJE gång eventet triggas
-        # Nu skickar vi vidare den data vi just såg i notisen till din dialog-funktion
         self.table.on('cell-click', lambda e: self.open_edit_dialog(e.args['row'], e.args['col'])) # Lyssna på custom eventet och visa notis
         
 # -----------------------------
@@ -337,16 +361,19 @@ class DataTable:
     def _apply_filter(self, term):
         term = term.lower()
         filtered = []
+        if term == "":
+            self.filtered_df = self.df_latest.copy()
+            self.add_summary_row()
+            self.table.rows = [self.summary_row] + self.top_rows + self._format_rows(self.filtered_df.to_dict(orient='records'))
+            self.table.update()
+            return
         for row in self.df.to_dict(orient='records'):
             if any(term in str(value).lower() for value in row.values()):                
                 filtered.append(row)
-        self.filtered_df = pd.DataFrame(filtered)
-        if self.is_summary:
-            self.add_summary_row()
-        filtered.insert(0, self.summary_row)
-        self.table.rows = filtered
         filtered = self._format_rows(filtered)
+        self.table.rows = filtered
         self.table.update()
+
 
 
     def _update_columns(self, hidden_columns: List[str]):

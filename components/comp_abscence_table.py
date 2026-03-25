@@ -4,10 +4,9 @@ from backend.models import CandidateAway
 
 class AbsenceTable:
     def __init__(self, name_list, month_cols, vacation_rows, callbacks = None):
-        print("Initializing AbsenceTable with data:")
-        print("name_list:", name_list)
-        print("month_cols:", month_cols)
-        print("vacation_rows:", vacation_rows)
+        # id_start = 1
+
+        # for r in vacation_rows:
         self.name_list = name_list
         self.month_cols = month_cols
         self.vacation_rows = vacation_rows
@@ -57,6 +56,7 @@ class AbsenceTable:
         id = row.get("id")
         print("Deleting row with id:", id)
         await self.callbacks["delete_abscence"](id)
+        self.update_table([r for r in self.vacation_rows if r["id"] != id])
         ui.notify("Absence deleted", type='negative')
 
     def edit_row(self, e: events.GenericEventArguments):
@@ -147,7 +147,6 @@ class AbsenceTable:
 
 
     def add_row(self):
-
         with ui.dialog() as dialog:
             with ui.card().classes('p-4 w-96'):
 
@@ -196,18 +195,7 @@ class AbsenceTable:
     
     async def save_new_row(self, cid, start, end, percent, notes, dialog):
         print(cid)
-        new_row = {
-            'name': f'{cid}: {self.name_list.get(cid, "Unknown")}',
-            'start_month': start,
-            'end_month': end,
-            'away_percent': percent,
-            'notes': notes,
-        }
-
-        self.vacation_rows.append(new_row)
-        self.table.rows = self.vacation_rows
-        self.table.update()
-        await self.callbacks["update_or_add_abscence"](CandidateAway(
+        new_row = await self.callbacks["update_or_add_abscence"](CandidateAway(
             id=None,  # Assuming a new row doesn't have an ID yet
             candidate_id=cid,
             start_date=start,
@@ -215,6 +203,12 @@ class AbsenceTable:
             away_percent=percent,
             notes=notes
         ))
+        self.vacation_rows.append(new_row)
+        self.table.rows = self.vacation_rows
+        print("New row added:", new_row)
+        print("Updated rows:", self.table.rows)
+        self.table.update()
+        
         ui.notify("Absence added", type='positive')
         dialog.close()
 

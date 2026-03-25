@@ -109,7 +109,6 @@ class APIController:
         return await self._request("GET", "/get-workinghour-table")
     
     async def delete_allocations(self, allocation_list):
-        print("API   delete_allocations, allocation_list:", allocation_list)
         payload = [
             ContractAllocationRequest(
                 contract_id=item["contract_id"],
@@ -151,6 +150,7 @@ class APIController:
         payload = [
             ContractAllocationRequest(
                 contract_id=allocation_list["contract_id"],
+                old_candidate_id=allocation_list["old_candidate_id"],
                 candidate_id=candidate_id,
                 allocation_percent=allocation_list["allocation_percent"]
             ).dict()
