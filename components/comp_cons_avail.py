@@ -14,7 +14,6 @@ import sys
 import re
 import os
 from datetime import date, datetime
-import backend.services as services
 from backend.models import ContractRequest, ContractAllocation
 import holidays
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
@@ -24,7 +23,7 @@ import holidays
 
 class DataTable:
     def __init__(self, df: pd.DataFrame, title="Table", hidden_columns: List[str] = None, is_summary=False, alloc_table = False, 
-                 perc_table = False, callbacks = None, top_rows = None):
+                 perc_table = False, contract_table=False, callbacks = None, top_rows = None):
         self.original_df = df.copy()
         self.df = df
         self.name_list = []
@@ -33,6 +32,7 @@ class DataTable:
         self.title = title
         self.perc_table = perc_table
         self.alloc_table = alloc_table
+        self.contract_table = contract_table
         self.table = None
         callbacks = callbacks or {}
         self.change_step = 0.1
@@ -41,6 +41,10 @@ class DataTable:
         self.delete_allocation = callbacks.get("delete_row")
         self.change_step_alloc = callbacks.get("change_alloc")
         self.get_dialog_data = callbacks.get("get_dialog_data")
+        self.update_notes = callbacks.get("update_notes")
+        self.add_contract = callbacks.get("add_contract")
+        self.delete_contract = callbacks.get("delete_contract")
+        self.edit_contract = callbacks.get("edit_contract")
         print("top rows in init", top_rows)
         self.group_mode = "None"
         self.enable_buttons = True
@@ -123,9 +127,122 @@ class DataTable:
                     ui.button("Cancel", on_click=dialog.close)
                     ui.button("Save", on_click=lambda: save_and_close()).classes("bg-blue-500 text-white")
         dialog.open()
-    
 
-# -----------------------------
+    async def adding_contract(self, add_or_edit = "add"):
+        row = self.selected_rows    
+        print("row for contract dialog:", row)
+        def year_month_list(year: int):
+                return [f"{year}-{m:02d}" for m in range(1, 13)]
+
+        def to_year_month(date_str):
+            if not date_str:
+                return None
+            return datetime.fromisoformat(date_str).strftime("%Y-%m")
+        
+        with ui.dialog() as dialog:
+            if add_or_edit == "add" or not row:
+                # defaultvärden för nytt kontrakt
+                contract_description_value = None
+                contract_customer_value = None
+                contract_total_hours_value = 100
+                contract_start_date_value = None
+                contract_end_date_value = None
+                contract_notes_value = None
+            else:
+                # värden från vald rad
+                r = row[0]
+                contract_id = r.get("contract_id", "")
+                contract_description_value = r.get("description", None)
+                contract_customer_value = r.get("customer", None)
+                contract_total_hours_value = r.get("contract_hours", 100)
+                contract_start_date_value = to_year_month(r.get("start_date"))
+                contract_end_date_value = to_year_month(r.get("end_date"))
+                contract_notes_value = r.get("notes", None)
+            
+            year_month_list = year_month_list(2026)
+            async def save_and_close():
+                data = {
+                    "description": contract_description.value,
+                    "contract_hours": contract_total_hours.value,
+                    "customer": contract_customer.value,
+                    "start_month": contract_start_date.value,
+                    "end_month": contract_end_date.value,
+                    "notes": contract_notes.value,
+                }
+                if add_or_edit == "edit":
+                    await self.edit_contract(contract_id, data)
+                else:
+                    await self.add_contract(data)
+                dialog.close()
+            
+            with ui.card().classes('p-4 w-96'):
+                ui.label("Adding contract").classes("text-lg font-bold mb-4")
+
+                contract_description = ui.input(
+                    label="Contract description",
+                    value=contract_description_value
+                ).classes("w-full")
+                contract_customer = ui.input(
+                    label="Customer",
+                    value=contract_customer_value
+                ).classes("w-full")
+                contract_total_hours = ui.number(
+                    label="Contract hours",
+                    format="%.0f",
+                    step=20,
+                    value=contract_total_hours_value,
+                    min=0
+                ).classes("w-full")
+
+                # Bättre layout för selects
+                with ui.grid(columns=2).classes("w-full gap-2 mt-4"):
+                    contract_start_date = ui.select(
+                        options=year_month_list,
+                        label="Start month",
+                        value=contract_start_date_value
+                    ).classes("w-full")
+                    contract_end_date = ui.select(
+                        options=year_month_list,
+                        label="End month",
+                        value=contract_end_date_value
+                    ).classes("w-full")
+                contract_notes = ui.input(
+                    label="Notes",
+                    value=contract_notes_value
+                ).classes("w-full")
+                # Knappar
+                with ui.row().classes("justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close)
+                    ui.button(
+                        "Save",
+                        on_click=lambda: save_and_close()
+                    ).classes("bg-blue-500 text-white")
+                dialog.open()
+    
+    async def editing_contract(self):
+        if not self.selected_rows:
+            ui.notify("No contract selected for editing", color="red")
+            return
+        if len(self.selected_rows) > 1:
+            ui.notify("Please select only one contract to edit", color="red")
+            return
+        await self.adding_contract(add_or_edit="edit")
+    
+    async def deleting_contract(self):
+        if not self.selected_rows:
+            ui.notify("No contract selected for deletion", color="red")
+            return
+        if len(self.selected_rows) > 1:
+            ui.notify("Please select only one contract to delete", color="red")
+            return
+        contract_id = self.selected_rows[0].get("contract_id")
+        if not contract_id:
+            ui.notify("Selected row does not have a valid contract_id", color="red")
+            return
+        await self.delete_contract(contract_id)
+
+
+#---------------------------------
 # RENDER AND UPDATE
 # -----------------------------
 
@@ -165,7 +282,12 @@ class DataTable:
                 add_button = ui.button(text = "Copy/add allocation", icon="add", color = 'blue', on_click = self.add_alloc).bind_enabled_from(self.radio, 'value', lambda v: v == 'None' )
 
                 ui.space()
-            
+                self.add_filter()
+            elif self.contract_table:
+                add_button = ui.button(text = "Copy/add contract", icon="add", color = 'blue', on_click = self.adding_contract)
+                edit_button = ui.button(text = "Edit contract", icon="edit", color = 'grey', on_click = self.editing_contract)
+                delete_button = ui.button(text = "Delete contract", icon="delete", color = 'red', on_click = self.deleting_contract)
+                ui.space()
                 self.add_filter()
             else:
                 ui.space()
@@ -203,22 +325,7 @@ class DataTable:
             self.table.on('cell-edit', self._on_cell_edit)
             self.table.on_select(self.update_selected_row)  # eller ditt lambda-notify
 
-
-            # Fixa cell-klick utan att störa selection
             for col in self.month_cols:
-                # self.table.add_slot(f"body-cell-{col}", f"""
-                #     <q-td :props="props" class="cursor-pointer"
-                #         @click.stop="$parent.$emit('cell-click', {{row: props.row, col: '{col}'}})">
-                #         {{{{ props.row['{col}'] }}}}
-                #     </q-td>
-                # """)
-                # self.table.add_slot(f"body-cell-{col}", f"""
-                #     <q-td :props="props" class="cursor-pointer bg-red-100"
-                #         @click.stop="$emit('cell-click', {{row: props.row, col: '{col}'}}); $q.notify('Klick på {col}!!!')">
-                #         {{{{ props.value }}}}   <!-- ← props.value är oftast snyggare än props.row[col] -->
-                #     </q-td>
-                # """)
-                
                 col_str = str(col)
                 self.table.add_slot(f'body-cell-{col_str}', f'''
                     <q-td :props="props" class="cursor-pointer" 
@@ -226,8 +333,13 @@ class DataTable:
                         {{{{ props.value }}}}
                     </q-td>
                 ''')
+                self.table.add_slot(f'body-cell-notes', f'''
+                    <q-td :props="props" class="cursor-pointer" 
+                        @click="$parent.$emit('notes-click', {{ row: props.row, col: 'notes' }})">
+                        {{{{ props.value }}}}
+                    </q-td>
+                ''')
              
-
             # Valfrir "select all" checkbox i header (bra för multiple)
             if selection_mode == 'multiple':
                 self.table.add_slot('header-selection', r'''
@@ -236,6 +348,8 @@ class DataTable:
                     </q-th>
                 ''')
         self.table.on('cell-click', lambda e: self.open_edit_dialog(e.args['row'], e.args['col'])) # Lyssna på custom eventet och visa notis
+        self.table.on('notes-click', lambda e: self.open_notes_dialog(e.args['row'], e.args['col'])) # Lyssna på custom eventet och visa notis
+        # self.table.on('notes-click', lambda e: ui.notify(f"Notes clicked for row: {e.args['row']}, column: {e.args['col']}")) # Lyssna på custom eventet och visa notis
         
 # -----------------------------
 # FILTER AND GROUPING
@@ -271,7 +385,7 @@ class DataTable:
             self.enable_buttons = False
             print("it is candidate")
             df = (
-                self.df_latest.groupby("candidate_id")
+                self.df_latest.groupby("candidate_name")
                 .agg(
                     {
                         "contract_id": lambda x: ", ".join(sorted(set(x))),
@@ -287,7 +401,7 @@ class DataTable:
                 self.df_latest.groupby("contract_id")
                 .agg(
                     {
-                        "candidate_id": lambda x: ", ".join(sorted(set(x))),
+                        "candidate_name": lambda x: ", ".join(sorted(set(x))),
                         "description": "first",
                         **{m: "sum" for m in self.month_cols},
                     }
@@ -302,8 +416,6 @@ class DataTable:
         print("Cell edit event args:", e.args)
         data = e.args[0] 
         ui.notify(f"Saving value {data['value']} for contract {data['contract_id']}, candidate {data['candidate_id']}, month {data['month']}")
-
-
 
     def open_edit_dialog(self, row, col):
         print(f"Opening edit dialog for row: {row}, column: {col}")
@@ -340,6 +452,33 @@ class DataTable:
                 ui.button("Cancel", on_click=edit_dialog.close).props('flat')
 
         edit_dialog.open()
+    
+    def open_notes_dialog(self, row, col):
+        print(f"Opening notes dialog for row: {row}, column: {col}")        
+        async def save_notes():
+            new_value = self.edit_value.value
+            print(f"Saving notes for contract {row['contract_id']} to: {new_value}")
+            notes_dialog.close()
+            new_row = row.copy()
+            new_row[col] = new_value
+            for r in self.table.rows:
+                if r['id'] == row['id']:
+                    r[col] = new_value
+                    break
+            self.table.update()
+            await self.update_notes(row, col, new_value)            
+
+        with ui.dialog() as notes_dialog, ui.card().classes('p-4 w-96'):
+            ui.label("Update notes").classes("text-lg font-bold mb-4")
+            # Här skickar vi in initial_value (som nu är en ren float från DF)
+            self.edit_value = ui.input(
+                value=row.get('notes', ''),
+                placeholder="Enter notes here"
+             ).classes('w-full')            
+            with ui.row():
+                ui.button("Save", on_click=save_notes)
+                ui.button("Cancel", on_click=notes_dialog.close).props('flat')
+        notes_dialog.open()
 
     def add_filter(self, fields_to_search=None):
         with self.filter_container:
@@ -406,7 +545,7 @@ class DataTable:
                     summary[col] = round(self.filtered_df[col].sum(), 1)
                 else:
                     summary[col] = ''
-            summary["contract id"] = "Total"  # eller "Summary"
+        summary["candidate_name"] = "TOTAL"  # eller "Summary"
         summary["id"] = "summary"  # Viktigt för att inte kollidera med riktiga rader
         self.summary_row = summary
 
@@ -421,7 +560,7 @@ class DataTable:
                 capacity[col] = self.capacity_dict.get(col, '')
             else:
                 capacity[col] = ''
-        capacity["contract_id"] = "Capacity"
+        capacity["candidate_name"] = "CAPACITY"
         capacity["id"] = "summary_capacity"
         self.top_rows.append(capacity)
         # --- AVERAGE ---
@@ -434,21 +573,21 @@ class DataTable:
                 avg[col] = f"{self.average_dict.get(col, 0) * 100:.0f}%"
             else:
                 avg[col] = ''
-        avg["contract_id"] = "Average"
+        avg["candidate_name"] = "UTILISATION"
         avg["id"] = "summary_average"
         print("Average row to add:", avg)
         self.top_rows.append(avg)
         print("Top rows after adding average:", self.top_rows)
 
     def update_selected_row(self, e):
-        selected_rows = self.table.selected
-        print("Selected rows:", selected_rows)
+        self.selected_rows = self.table.selected
+        print("Selected rows:", self.selected_rows)
         if self.perc_table:
             self.selected_rows = [ 
                 { "contract_id": row["contract_id"], "candidate_id": row["candidate_id"] } 
-                for row in selected_rows ]
-        else:
-            self.selected_rows = [ row["contract_id"] for row in selected_rows ]
+                for row in self.selected_rows ]
+        # else:
+        #     self.selected_rows = [ row["contract_id"] for row in selected_rows ]
         print("Rader valda:", self.selected_rows)
 
         

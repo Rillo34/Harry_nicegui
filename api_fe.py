@@ -96,6 +96,18 @@ class APIController:
     # CONTRACTS AND ALLOCATIONS
     # -----------------------------
 
+    async def add_contract(self, contract_data):
+        print("API add_contract, contract_data:", contract_data)
+        return await self._request("POST", "/add-contract", json=contract_data)
+    
+    async def edit_contract(self, contract_id, contract_data):
+        print("API edit_contract, contract_id:", contract_id, "contract_data:", contract_data)
+        return await self._request("PATCH", f"/edit-contract/{contract_id}", json=contract_data)
+    
+    async def delete_contract(self, contract_id):
+        print("API delete_contract, contract_id:", contract_id)
+        return await self._request("DELETE", f"/delete-contract/{contract_id}")
+
     async def get_contracts_table(self):
         return await self._request("GET", "/get-contracts-table")
 
@@ -173,6 +185,15 @@ class APIController:
     async def delete_abscence(self, abscence_id):
         print("API delete_abscence, abscence_id:", abscence_id)
         return await self._request("DELETE", f"/delete-abscence/{abscence_id}")
+    
+    async def update_notes(self, contract_id, candidate_id, new_value):
+        print(f"API update_allocation_notes, contract_id: {contract_id}, candidate_id: {candidate_id}, new_value: {new_value}")
+        payload = {
+            "contract_id": contract_id,
+            "candidate_id": candidate_id,
+            "notes": new_value
+        }
+        return await self._request("POST", "/update-notes", json=payload)
 
     # -----------------------------
     # AVAILABILITY
