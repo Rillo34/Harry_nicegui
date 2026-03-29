@@ -16,16 +16,19 @@ class JobList:
         self.status_options = callbacks["status_options"]
         self.jobs_map = {j.job_id: j for j in job_objects}
         self.jobs_list = []
+        self.hidden_columns = ["job_id"]
 
         # self.controller = ui.get_app_state().ui_controller
 
         for job in job_objects:
-            job_dict = job.model_dump(exclude_none=True)
+            job_dict = job.model_dump(exclude_none=False)
             job_dict['musthave'] = [r.model_dump(exclude_none=True) for r in job.requirements if r.ismusthave]
             job_dict['desirable'] = [r.model_dump(exclude_none=True) for r in job.requirements if not r.ismusthave]
             job_dict['expanded'] = False
             self.jobs_list.append(job_dict)
-        # print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
+        print("--------------\nInitialized JobList with jobs:")  # Debug: Verify initialization
+        print("Jobs list:", self.jobs_list)  # Debug: Verify jobs_list
+        print("--------------")
 
         self.valid_states = ["1-Open", "2-In Progress", "3-Offered", "4-Contracted"]
 
@@ -33,7 +36,7 @@ class JobList:
         #     'job_id', 'customer', 'title', 'contact_person', 'start_date', 'end_date', 'job_hours', 'duration', 'due_date',
         #     'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
         # ]
-        exclude = {"expanded", "musthave", "desirable", "description", "requirements"}
+        exclude = { "musthave", "desirable", "description", "requirements", "expanded"}
 
         self.all_columns = [
             {
@@ -50,31 +53,13 @@ class JobList:
             {"name": "details", "label": "Details", "field": "details", "sortable": False, "align": "center"},
             {"name": "actions", "label": "", "field": "actions", "sortable": False, "align": "center"},
         ]
-        print(self.all_columns)
-        # self.all_columns = [
-        #     {"name": "job_id", "label": "Job ID", "field": "job_id", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-        #     {"name": "customer", "label": "Customer", "field": "customer", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-        #     {"name": "title", "label": "Title", "field": "title", "sortable": True, "style": "max-width: 200px; white-space: normal;", "align": "left"},
-        #     {"name": "contact_person", "label": "Contact Person", "field": "contact_person", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-        #     {"name": "start_date", "label": "Start Date", "field": "start_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
-        #     {"name": "end_date", "label": "End Date", "field": "end_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
-        #     {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-        #     {"name": "job_hours", "label": "Job Hours", "field": "job_hours", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-        #     {"name": "duration", "label": "Duration", "field": "duration", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-        #     {"name": "due_date", "label": "Due Date", "field": "due_date", "sortable": True, "style": "max-width: 120px; white-space: nowrap;", "align": "left"},
-        #     {"name": "days_left", "label": "Days Left", "field": "days_left", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-        #     {"name": "candidates", "label": "Candidates", "field": "candidates", "sortable": True, "style": "max-width: 100px; white-space: nowrap;", "align": "left"},
-        #     {"name": "highest_candidate_status", "label": "Top Candidate Status", "field": "highest_candidate_status", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-        #     {"name": "assigned_to", "label": "Assigned To", "field": "assigned_to", "sortable": True, "style": "max-width: 150px; white-space: normal;", "align": "left"},
-        #     {"name": "state", "label": "State", "field": "state", "sortable": True, "style": "max-width: 130px; white-space: nowrap;", "align": "left"},
-        #     {"name": "details", "label": "Details", "field": "details", "sortable": False, "style": "max-width: 100px;", "align": "center"},
-        #     {"name": "actions", "label": "", "field": "actions", "sortable": False, "style": "width: 50px;", "align": "center"}
-        # ]
+        
 
         self.selected_columns = []
-        self.columns = [col for col in self.all_columns if col['name'] not in self.selected_columns]
+        self.columns = [col for col in self.all_columns if col['name'] not in self.hidden_columns]
 
         self._build_ui()
+    
 
     def _build_ui(self):
         with ui.row().classes('items-center p-2').style('width: auto; background-color: #f5f5f5; border-radius: 8px;'):
@@ -84,7 +69,7 @@ class JobList:
                 [col['name'] for col in self.all_columns],
                 multiple=True,
                 label='Hide Columns',
-                value=self.selected_columns,
+                value=self.hidden_columns,
                 on_change=self._update_columns
             ).props('outlined dense').style('margin-left: 20px; width: 250px;')
 
@@ -103,7 +88,7 @@ class JobList:
                 "body-cell-details",
                 r'''
                 <q-td :props="props" style="text-align: center;">
-                    <q-btn dense flat round :icon="props.row.expanded ? 'expand_less' : 'expand_more'" color="primary" @click="$parent.$emit('toggle_expand', props.row.job_id)" />
+                    <q-btn dense flat round :icon="props.row.expanded ? 'expand_less' : 'expand_more'" color="primary" @click.stop="$parent.$emit('toggle_expand', props.row.job_id)" />
                 </q-td>
                 '''
             )
@@ -183,15 +168,16 @@ class JobList:
                 '''
             )
             self.table.on('menu_action', self._on_action)
-            self.table.on('toggle_expand', self._on_toggle_expand)
             self.table.on('status_change', self._on_status_change)
             self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))
+            self.table.on('toggle_expand', self._on_toggle_expand)
 
+    
     def _update_columns(self, e):
-        self.selected_columns = e.value if e.value else []
+        self.hidden_columns = e.value if e.value else []
         self.columns = [
             col for col in self.all_columns
-            if col['name'] not in self.selected_columns
+            if col['name'] not in self.hidden_columns
         ]
         # self.columns = sorted(
         #     self.columns,
@@ -202,12 +188,11 @@ class JobList:
 
     def _on_toggle_expand(self, event):
         job_id = event.args
-        print(f"Toggle expand for job_id: {job_id}")
-        for job in self.jobs_list:
-            if job['job_id'] == job_id:
-                job['expanded'] = not job['expanded']
+        ui.notify(f"Toggling details for job_id: {job_id}")
+        for row in self.table.rows:
+            if row['job_id'] == job_id:
+                row['expanded'] = not row['expanded']
                 break
-        print(f"Jobs list after toggle: {self.jobs_list}")
         self.table.update()
 
     async def _on_status_change(self, event):

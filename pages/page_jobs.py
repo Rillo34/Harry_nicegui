@@ -29,6 +29,7 @@ async def jobs_page():
     
     callbacks = { "on_status_change": on_status_change, "status_options": status_options } 
     joblist = await API_client.get_all_jobs()
+    print("Initial joblist from API:\n", joblist)
     old_jobs = JobList(joblist, callbacks)
     ui.button("Get jobs from directory", on_click = get_jobs_from_dir_api)
 
