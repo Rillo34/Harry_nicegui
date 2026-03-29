@@ -3,173 +3,119 @@ from dataclasses import dataclass
 from typing import List, Dict, Any
 from nicegui import ui
 from pyparsing import Any, Dict
+from sqlalchemy import true
 from niceGUI.components.comp_left_drawer import LeftDrawer
 from niceGUI.app_state import API_client, ui_controller
-from niceGUI.components.comp_cons_avail import DataTable
-# from niceGUI.components.comp_cons_avail import DataTable2
-from niceGUI.components.comp_abscence_table import AbsenceTable
 import pandas as pd
 from tabulate import tabulate
 import random
 
-class AbsenceHandler:
-    async def load_data(self):
-        self.candidates = await API_client.get_internal_candidates()
-        self.candidate_name_list = {c["candidate_id"]: c["name"] for c in self.candidates}
-        self.vacations = await API_client.get_abscence()
-        self.vacation_dict = {v["id"]: v for v in self.vacations}
 
-    async def update_or_add_abscence(self, data):
-        data_dict = data.model_dump()
-        candidate_away = await API_client.update_or_add_abscence(data_dict)
-        return candidate_away
-    async def delete_abscence(self, abscence_id):
-        await API_client.delete_abscence(abscence_id)
+input_data = {
+    'candidates': [
+        {
+            'id': None,
+            'candidate_id': 'DS_71',
+            'candidate_name': 'Göran ',
+            'assessment': 'OK',
+            'problem_months': [
+                '2026-01',
+                '2026-02',
+            ],
+            'total_time': True,
+            'conflicting_projects': [
+                'Gångaren',
+            ],
+            'summary': (
+                "Göran is heavily overbooked in January and February 2026. "
+                "This is due to the project 'Gångaren'."
+            ),
+        },
+        {
+            'id': None,
+            'candidate_id': 'GJ_99',
+            'candidate_name': 'Catarina',
+            'assessment': 'BAD',
+            'problem_months': [
+                '2026-01',
+                '2026-02',
+                '2026-06',
+            ],
+            'total_time': False,
+            'conflicting_projects': [
+                'Diverse Hjälp Johan och Magnus.',
+                'Villa Nacka.',
+                'Diverse',
+            ],
+            'summary': (
+                "Catarina is overbooked in January, February, and June 2026. "
+                "This is due to 'Diverse Hjälp Johan och Magnus', "
+                "'Villa Nacka', and 'Diverse' projects."
+            ),
+        },
+    ],
+    'overall_summary': (
+        "Both candidates have scheduling conflicts. "
+        "It is recommended to find alternative candidates without these overbooked months."
+    ),
+}
+def render_availability_grid(candidates):
+    color_map = {
+        'OK': '#2ecc71',
+        'BAD': '#e74c3c',
+        'WEAK': '#f39c12',
+        'EXCELLENT': '#3498db',
+        'WITH SHUFFLE': '#95a5a6'
+    }
 
-
-class ContractHandler:
-    def __init__(self):
-        self.contract_table = None
-        self.hidden_cols = None
-        
-    async def load_data(self):
-        contract_table, self.hidden_cols = await API_client.get_contracts_table()
-        self.contract_df = pd.DataFrame(contract_table)
-        self.working_hours_df = pd.DataFrame(await API_client.get_workinghour_table())
-
-    async def update_table(self):
-        contract_table, hidden_cols = await API_client.get_contracts_table()
-        self.contract_df = pd.DataFrame(contract_table)
-        self.contract_table.update(self.contract_df)
-
-    async def add_contract(self, contract_data):
-        await API_client.add_contract(contract_data)
-        await self.update_table()  # uppdatera tabellen med ny data
-        await self.allocation_handler.load_data(self)  # ladda om allocation data efter ändring
-        self.allocation_handler.update_tables()  # uppdatera tabellerna med ny data
-        ui.notify("Contract added (this is a placeholder, implement backend logic)", type='success')
+    # Grid-inställningar: 
+    # repeat(3, min-content) = Namn, Status, Score tar bara platsen de behöver.
+    # 180px = Conflicts får en fast box så de inte sprider ut sig.
+    # 1fr = Analys tar resten.
+    grid_style = 'repeat(3, min-content) 180px 1fr'
     
-    async def edit_contract(self, contract_id, updated_data):
-        await API_client.edit_contract(contract_id, updated_data)
-        await self.update_table()  # uppdatera tabellen med ny data
-        await self.allocation_handler.load_data(self)  # ladda om allocation data efter ändring
-        self.allocation_handler.update_tables()  # uppdatera tabellerna med ny datav
-        ui.notify("Contract updated (this is a placeholder, implement backend logic)", type='success')
-    
-    async def delete_contract(self, contract_id):
-        print(f"Deleting contract {contract_id}")
-        await API_client.delete_contract(contract_id)  # ladda om både kontrakt och allocation data efter ändring
-        await self.update_table()  # uppdatera tabellen med ny data
-        await self.allocation_handler.load_data(self)  # ladda om allocation data efter ändring
-        self.allocation_handler.update_tables()  # uppdatera tabellerna med ny data
-        ui.notify("Contract deleted (this is a placeholder, implement backend logic)", type='success')
-
-    async def update_notes(self, row, col, new_value):
-        contract_id = row["contract_id"]
-        await API_client.update_notes(contract_id, candidate_id="CONTRACT", new_value=new_value)
-
-
-class AllocationHandler:
-    def __init__(self):
-        self.perc_table = None
-        self.hour_table = None
-    async def load_data(self, contract_handler: ContractHandler):
-        allocation_tables = await API_client.get_allocations_perc_and_hours()
-        self.allocation_df_perc = pd.DataFrame(allocation_tables["allocation_perc"])
-        self.allocation_df_hours = pd.DataFrame(allocation_tables["allocation_hours"]).round(0)
-        self.month_list = [col for col in contract_handler.contract_df.columns if col.startswith("202")]
-        total = await API_client.get_total_capacity_and_average()
-        self.capacity_dict = total["capacity"]
-        self.utilisation_dict = total["average"]
-        self.top_rows = {
-            "capacity": self.capacity_dict,
-            "utilisation": self.utilisation_dict
-        }
-    def update_tables(self):
-        self.perc_table.update(self.allocation_df_perc, top_rows=self.top_rows)
-        self.hour_table.update(self.allocation_df_hours)
+    with ui.grid(columns=grid_style).classes('w-full max-w-7xl bg-white p-4 items-center gap-x-8 gap-y-2'):
         
-    async def delete_row(self, rows):
-        await API_client.delete_allocations(rows)
-        await self.contract_handler.load_data()  # ladda om data efter borttagning
-        await self.load_data(self.contract_handler)  # ladda om data efter borttagning
-        self.update_tables()  # uppdatera tabellerna med ny data
-        
-    async def change_alloc(self, rows, step):
-        change_list = [
-            {"contract_id": r["contract_id"], "candidate_id": r["candidate_id"], "change": step}
-            for r in rows
-        ]
-        await API_client.change_allocation(change_list)
-        await self.contract_handler.load_data()  # ladda om data efter borttagning
-        await self.load_data(self.contract_handler)  # ladda om data efter borttagning
-        self.update_tables()  # uppdatera tabellerna med ny data
+        # --- Header ---
+        ui.label('Candidate').classes('text-xs font-black text-slate-400 uppercase pb-2')
+        ui.label('Status').classes('text-xs font-black text-slate-400 uppercase pb-2 text-center')
+        ui.label('Score').classes('text-xs font-black text-slate-400 uppercase pb-2 text-center')
+        ui.label('Conflicts').classes('text-xs font-black text-slate-400 uppercase pb-2 text-center')
+        ui.label('Analysis').classes('text-xs font-black text-slate-400 uppercase pb-2')
 
+        ui.separator().classes('col-span-5')
 
-    async def change_cell_alloc(self, row, col, new_value):
-        await API_client.change_cell_alloc([{
-            "contract_id": row["contract_id"],
-            "candidate_id": row["candidate_id"],
-            "month": col,
-            "new_value": new_value
-        }])
-        await self.contract_handler.load_data()  # ladda om data efter borttagning
-        await self.load_data(self.contract_handler)  # ladda om data efter borttagning
-        self.update_tables()  # uppdatera tabellerna med ny data
+        for cand in candidates:
+            status = str(cand.get('assessment', 'UNKNOWN')).upper()
+            bg_color = color_map.get(status, '#95a5a6')
+            
+            # 1. Namn - font-bold men kompakt py
+            ui.label(cand.get('candidate_name')).classes('font-bold text-base py-2 min-w-[150px]')
 
-    async def add_alloc(self, selected_row, candidate_ids, percent):
-        old_row = selected_row[0]
-        contract_id = old_row["contract_id"]
-        old_candidate_id = old_row["candidate_id"]
-        await API_client.add_allocation_to_contract({
-            "contract_id": contract_id,
-            "old_candidate_id": old_candidate_id,
-            "candidate_ids": candidate_ids,
-            "allocation_percent": percent/100  # konvertera till decimal
-        })
-        # await self.load_data(self.contract_handler)  # ladda om data efter ändring
-        await self.contract_handler.load_data()  # ladda om data efter borttagning
-        await self.load_data(self.contract_handler)  # ladda om data efter borttagning
-        self.update_tables()  # uppdatera tabellerna med ny data
+            # 2. Status Badge - Fortfarande fet men mindre padding
+            with ui.element('div').style(f'background-color: {bg_color};').classes('rounded-md px-3 py-1 min-w-[100px] text-center shadow-sm'):
+                ui.label(status).classes('text-white text-[14px] font-black tracking-widest uppercase')
 
-        
+            # 3. Score - Kompakt men tydlig
+            score = cand.get('suitability_score')
+            score_text = f"{score:.0f}" if isinstance(score, (int, float)) else "N/A"
+            ui.label(score_text).classes('text-center font-black text-lg text-slate-700 py-2')
 
-    async def get_dialog_data(self, row):
-        print("get_dialog_data called with row:", row)
-        name_list = self.abscence_handler.candidate_name_list
-        current_candidate = row[0]['candidate_id']
-        filtered = {k: v for k, v in name_list.items() if k != current_candidate}
-        return filtered
-        
-    async def update_notes(self, row, col, new_value):
-        contract_id = row["contract_id"]
-        candidate_id = row["candidate_id"]
-        await API_client.update_notes(contract_id, candidate_id, new_value)
-        print(f"Updating notes for allocation")
-        
-# async def load_data_contract_and_alloc(contract_handler, allocation_handler):
-#     contract_table, hidden_cols = await API_client.get_contracts_table()
-#     contract_handler.contract_df = pd.DataFrame(contract_table)
-#     contract_handler.hidden_cols = hidden_cols
-#     allocation_tables = await API_client.get_allocations_perc_and_hours()
-#     allocation_handler.allocation_df_perc = pd.DataFrame(allocation_tables["allocation_perc"])
-#     # print("Allocation DF Perc:\n", tabulate(self.allocation_df_perc.head(), headers='keys', tablefmt='psql'))
-#     allocation_handler.allocation_df_orig = allocation_handler.allocation_df_perc.copy()
-#     allocation_handler.allocation_df_hours = pd.DataFrame(allocation_tables["allocation_hours"]).round(0)
-#     allocation_handler.month_list = [col for col in contract_handler.contract_df.columns if col.startswith("202")]
-#     total = await API_client.get_total_capacity_and_average()
-#     allocation_handler.capacity_dict = total["capacity"]
-#     allocation_handler.utilisation_dict = total["average"]
-#     allocation_handler.top_rows = {
-#         "capacity": allocation_handler.capacity_dict,
-#         "utilisation": allocation_handler.utilisation_dict
-#     }
+            # 4. Conflicts - Flex-row som håller ihop chipsen
+            with ui.row().classes('gap-1 justify-center items-center py-2'):
+                problems = cand.get('problem_months', [])
+                if not problems:
+                    ui.icon('check_circle', color='green', size='24px')
+                else:
+                    for month in problems:
+                        # Mindre badges för att hålla radhöjden nere
+                        ui.badge(month, color='red').classes('text-[12px] font-bold px-1.5 py-0.5')
 
-# async def update_allocation_and_contract_data(contract_handler, allocation_handler):
-#     await load_data_contract_and_alloc(contract_handler, allocation_handler)
-#     allocation_handler.update_tables()
-#     contract_handler.update_table()
+            # 5. Analysis - Tätare radhöjd (leading-tight)
+            ui.label(cand.get('summary') or '-').classes('text-sm text-slate-700 leading-tight py-2 pr-4')
 
+            # Tunn separator för att markera radslutet
+            ui.separator().classes('col-span-5 opacity-20')
 
 
 @ui.page('/availability')
@@ -177,249 +123,30 @@ async def availability_page():
     drawer = LeftDrawer()
     ui.label("Availability Page")
 
-    # Skapa instanser
-    absence_handler = AbsenceHandler()
-    contract_handler = ContractHandler()
-    allocation_handler = AllocationHandler()
-    allocation_handler.contract_handler = contract_handler  # ge allocation_handler tillgång till contract_handler för att kunna ladda data efter ändringar
-    allocation_handler.abscence_handler = absence_handler
-    contract_handler.allocation_handler = allocation_handler  # ge contract_handler tillgång till allocation_handler för att kunna ladda data efter ändringar
-    # Ladda data
-    await absence_handler.load_data()
-    await contract_handler.load_data()
-    await allocation_handler.load_data(contract_handler)
-
-    # Callbacks
-    callbacks_alloc = {
-        "delete_row": allocation_handler.delete_row,
-        "change_alloc": allocation_handler.change_alloc,
-        "change_cell_alloc": allocation_handler.change_cell_alloc,
-        "add_alloc": allocation_handler.add_alloc,
-        "get_dialog_data": allocation_handler.get_dialog_data,
-        "update_notes": allocation_handler.update_notes
+    data = {
+        "is_contract": True,
+        "contract_id": "ca1",
+        "candidate_ids": ["DS_71", "MN_45", "LJ_50", "GL_94", "YH_32", "AS_09", "PS_94"],
+        # "candidate_ids": ["DS_71", "GJ_99"],
+        "job_id": ""
     }
-    callbacks_abscence = {
-        "update_or_add_abscence": absence_handler.update_or_add_abscence,
-        "delete_abscence": absence_handler.delete_abscence,
-    }
+    async def run_analysis():
+        results_container.clear()
+        with results_container:
+            ui.spinner('dots', size='lg', color='red') # Visa att något händer
+        
+        # Kör det tunga anropet
+        response = await API_client.get_availability_job_contract(data)
+        candidates = response.get("candidates", [])
+        # candidates.sort(key=lambda x: x.suitability_score if hasattr(x, 'suitability_score') else 0, reverse=True)
+        overall_summary = response.get("overall_summary", "No summary provided")
+        # candidates = input_data.get("candidates", [])
+        render_availability_grid(candidates)
+        results_container.clear()
+        with results_container:
+            ui.label(f"OVERALL CONCLUSION:").classes('text-md font-black bold text-black-700')
+            ui.label(f"{overall_summary}").classes('text-md text-black-700')
 
-    callbacks_contract = {
-        "add_contract": contract_handler.add_contract,
-        "edit_contract": contract_handler.edit_contract,
-        "delete_contract": contract_handler.delete_contract,
-        "update_notes": contract_handler.update_notes
-    }
-    # UI
-    with ui.column().classes('w-full'):
-        with ui.tabs().classes('w-full') as tabs:
-            allocation_perc_tab = ui.tab('Allocations % (edit)')
-            allocation_hour_tab = ui.tab('Allocations hours')
-            contract_tab = ui.tab('Contracts')
-            working_days_tab = ui.tab('Working days')
-            abscence_tab = ui.tab('Abscence')
-
-        with ui.tab_panels(tabs, value=allocation_perc_tab).classes('w-full'):
-
-            with ui.tab_panel(allocation_perc_tab):
-                allocation_handler.perc_table = DataTable(
-                allocation_handler.allocation_df_perc,
-                # hidden_columns=contract_handler.hidden_cols,
-                is_summary=True,
-                alloc_table=True,
-                perc_table=True,
-                top_rows=allocation_handler.top_rows,
-                callbacks=callbacks_alloc
-            )
-
-            with ui.tab_panel(allocation_hour_tab):
-                allocation_handler.hour_table = DataTable(
-                    allocation_handler.allocation_df_hours,
-                    hidden_columns=contract_handler.hidden_cols,
-                    is_summary=True
-                )
-
-            with ui.tab_panel(contract_tab):
-                contract_handler.contract_table = DataTable(
-                    contract_handler.contract_df,
-                    hidden_columns=contract_handler.hidden_cols,
-                    callbacks=callbacks_contract,
-                    contract_table=True,
-                    is_summary=True
-                )
-
-            with ui.tab_panel(working_days_tab):
-                DataTable(contract_handler.working_hours_df)
-
-            with ui.tab_panel(abscence_tab):
-                AbsenceTable(
-                    name_list=absence_handler.candidate_name_list,
-                    month_cols=allocation_handler.month_list,
-                    vacation_rows=absence_handler.vacations,
-                    callbacks=callbacks_abscence
-                )
-
-
-    # def add_alloc(self):
-    #     print("ska lägga till alloc:")
-
-    #     with ui.dialog() as dialog:
-    #         with ui.card().classes("p-4"):   # <-- VIKTIG
-    #             ui.label("Add new allocation")
-
-    #             contract_list = sorted(self.df['contract_id'].unique().tolist())
-    #             all_contracts = contract_list
-    #             all_candidates = sorted(self.df['candidate_id'].dropna().unique().tolist())
-
-    #             def get_candidates_for_contract(contract_id):
-    #                 used = set(self.df[self.df['contract_id'] == contract_id]['candidate_id'].dropna())
-    #                 print("used candidates for contract", contract_id, ":", used)
-    #                 return [c for c in all_candidates if c not in used]
-
-    #             def update_candidate_select(contract_id):
-    #                 candidates = get_candidates_for_contract(contract_id)
-    #                 candidate_select.options = candidates
-    #                 candidate_select.value = None
-    #                 candidate_select.update()
-
-    #             contract_select = ui.select(
-    #                 options=all_contracts,
-    #                 label="Contract id",
-    #                 value=contract_list[0] if contract_list else None,
-    #                 on_change=lambda e: update_candidate_select(e.value)
-    #             ).classes("w-48")
-
-    #             candidate_select = ui.select(
-    #                 options=get_candidates_for_contract(contract_select.value) if contract_select.value else [],
-    #                 multiple=True,
-    #                 value=None,
-    #                 clearable=True,
-    #                 on_change=lambda e: ui.notify(f"Selected candidates: {e.value}. Contract = {contract_select.value}"),
-    #                 label="Candidates to add:"
-    #             ).classes("w-72") 
-
-    #             alloc_percent = ui.number(
-    #                 "Alloc_percent",
-    #                 format="%.1f",
-    #                 step=0.1,
-    #                 value=0.5,
-    #                 min=0,
-    #                 max=1
-    #             ).classes("w-72")
-
-    #             with ui.row():
-    #                 ui.button("Cancel", on_click=dialog.close)
-    #                 async def _on_save(e):
-    #                     await self.add_allocation(  # skicka payload till funktionen
-    #                         {
-    #                             "contract_id": contract_select.value,
-    #                             "candidate_ids": candidate_select.value,
-    #                             "allocation_percent": alloc_percent.value
-    #                         }
-    #                     )
-    #                     dialog.close()
-
-    #                 ui.button("Save", on_click=_on_save).classes("bg-blue-500 text-white")
-    #     dialog.open()
-                #     with ui.row():    
-                #         ui.radio(['Group by contract', 'Candidate', 'None'], value = 'None', on_change= add_groupby_radio).props('dense').classes("m-2")
-                #         selected_label = ui.label("No selection yet").props('dense').classes("m-2")
-                #         def get_candidates_for_contract(contract_id):
-                #             allocated_candidates = allocation_df[
-                #                 allocation_df['contract_id'] == contract_id
-                #             ]['candidate_id'].tolist()
-                #             return allocated_candidates
-
-                #         def update_candidate_select(contract_id):
-                #             candidates = get_candidates_for_contract(contract_id)
-                #             candidate_select.options = all_candidates
-                #             candidate_select.value = candidates  # rensa val
-                #             candidate_select.update()
-                #             print("allocation df:\n", allocation_df_orig)
-                        
-                #         def update_alloc_df_orig(e):
-                #             global allocation_df_orig, allocation_df, month_cols
-
-                #             new_candidates = e.value
-                #             contract_id = contract_select.value
-
-                #             # 1. Uppdatera rådata
-                #             allocation_df_orig = update_allocations_for_contract(
-                #                 allocation_df_orig,
-                #                 contract_id,
-                #                 new_candidates
-                #             )
-
-                #             # 2. Bygg om allocation_df (med månadskolumner)
-                #             allocation_df = get_allocation_df(allocation_df_orig.to_dict(orient="records"))
-
-                #             allocation_df = allocation_df.sort_values("contract_id")
-                #             allocation_df = allocation_df[['id', 'contract_id', 'candidate_id'] + month_cols]
-                #             allocation_table.update(allocation_df)
-
-                            
-                #         with ui.row().classes("ml-10 gap-4"): # flyttar åt höger + luft mellan
-                #             contract_select = ui.select(
-                #                 options=all_contracts,
-                #                 label="Contract id",
-                #                 value=all_contracts[0] if all_contracts else None,
-                #                 on_change=lambda e: update_candidate_select(e.value)
-                #             ).classes("w-48")  # bredd
-                #             candidate_select = ui.select(
-                #                 options=all_candidates,
-                #                 multiple=True,
-                #                 value=get_candidates_for_contract(contract_select.value) if contract_select.value else [],
-                #                 # on_change=lambda e: ui.notify(f"Selected candidates: {e.value}. Contract = {contract_select.value}"),
-                #                 on_change=lambda e: update_alloc_df_orig(e),
-                #                 label="Candidates on contract"
-                #             ).classes("w-72")  # bredare
-                #     allocation_table = DataTable(allocation_df, is_summary=True)
-                #     # allocation_table.add_select()
-                # with ui.tab_panel(arbetsdagar_tab): 
-                #     arbetsdagar_table = DataTable(working_hours_df)
-
-    
-   
-
-
-    
-    
-       
-        # with ui.row().classes('flex flex-wrap items-center gap-2 w-full'):
-        #     def add_colored_badges(table):
-        #     # Hjälpfunktion för att slippa upprepa samma slot för varje kolumn
-        #         status_colors = """
-        #             :color="
-        #                 props.value === 'EXCELLENT' ? 'green' :
-        #                 props.value === 'OK'        ? 'orange' :
-        #                 props.value === 'BAD'       ? 'red' :
-        #                 props.value === 'WEAK'      ? 'deep-orange' :
-        #                 'grey'
-        #             "
-        #             :label="props.value || '-'"
-        #         """
-
-        #         for col_name in [job_list]:  # lägg till alla dina betygs-kolumner
-        #             with table.add_slot(f'body-cell-{col_name}'):
-        #                 with table.cell():  # ← viktigt: INGEN parameter här
-        #                     ui.badge().props(status_colors)
-
-        #     ui.label(f"Testing availability API with contract: {test_job} and candidates: {test_candidates}")
-        #     matrix_df = matrix_df.reset_index()  # gör candidate_id till kolumn
-        #     columns = [{"name": c, "label": c, "field": c} for c in matrix_df.columns]
-        #     table = ui.table(columns=columns, rows=matrix_df.to_dict("records"), row_key='candidate_id').props("v-html")
-        #     add_colored_badges(table)
-        #     with table.add_slot('body-cell-job1'):
-        #         ui.html('''
-        #             <q-td :props="props" 
-        #                 :class="{
-        #                     'EXCELLENT': 'bg-green-1 text-green-10',
-        #                     'OK':        'bg-orange-1 text-orange-10',
-        #                     'BAD':       'bg-red-1 text-red-10',
-        #                     'WEAK':      'bg-deep-orange-1 text-deep-orange-10'
-        #                 }[props.value] || 'bg-grey-2'">
-        #                 {{ props.value || '-' }}
-        #             </q-td>
-        #         ''')
-        #     print(f"Testing availability API with contract: {test_job} and candidates: {test_candidates}")
-
-   
+    # ui.button('Starta AI-Analys', on_click=run_analysis)
+    ui.button('Starta AI-Analys', on_click=run_analysis)
+    results_container = ui.column()

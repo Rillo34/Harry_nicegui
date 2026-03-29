@@ -206,12 +206,15 @@ class APIController:
             params={"contract_id": contract_id}
         )
 
-    async def get_availability_job_contract(self, is_contract, contract_id, candidate_ids):
+    async def get_availability_job_contract(self, data):
         payload= { 
-            "is_contract": is_contract,
-            "contract_id": contract_id, 
-            "candidate_ids": candidate_ids } 
+            "is_contract": data["is_contract"] or False,
+            "contract_id": data["contract_id"] or "", 
+            "candidate_ids": data["candidate_ids"] or [],
+            "job_id": data["job_id"] or "" } 
         return await self._request( "POST", "/availability-against-job-or-contract", json=payload)
+
+    
 
     # -----------------------------
     # FILE UPLOAD / EVALUATION
