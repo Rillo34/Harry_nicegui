@@ -1,6 +1,7 @@
 from gc import callbacks
 from dataclasses import dataclass
 from typing import List, Dict, Any
+from unittest import result
 from nicegui import ui
 from pyparsing import Any, Dict
 from sqlalchemy import true
@@ -123,29 +124,82 @@ async def availability_page():
     drawer = LeftDrawer()
     ui.label("Availability Page")
 
-    data = {
-        "is_contract": True,
-        "contract_id": "d33",
-        "candidate_ids": ["BF_20", "ZQ_10", "QB_84", "GG_38", "DD_08", "RU_29", "RZ_61", "QW_48", "EM_94"],
-        # "candidate_ids": ["DS_71", "GJ_99"],
-        "job_id": ""
-    }
+    candidates_to_test = await API_client.get_all_candidates_with_cv_and_basedata()
+    job_select_list = await API_client.get_job_selector_list()
+    contract_select_list = await API_client.get_contract_selector_list()
+    candidate_ids = [c["candidate_id"] for c in candidates_to_test]
+    print(f"Hämtade kandidater: {candidate_ids}")
+    options_dict = {c['candidate_id']: c['name'] for c in candidates_to_test}
+
+                # result = [
+                # {"candidate_id": item["candidate_id"], "name": item["name"]}
+#                 # for item in candidates_to_test
+#                 # ]
+
+    def on_change(e):
+        selected_ids = e.value 
+        selected_objs = [c for c in candidates_to_test if c["candidate_id"] in selected_ids]
+        names = [c['name'] for c in selected_objs]
+        if names:
+            print(f"Valda namn: {', '.join(names)}")
+        else:
+            print("Inga kandidater valda.")
+
+    with ui.row().classes('items-center gap-4'):
+        candidate_select = ui.select(
+            options=options_dict,
+            label='choose candidate',
+            multiple=True,
+            on_change=on_change
+        ).props('outlined').classes('w-64 text-lg')
+
+        ui.label().bind_text_from(
+            candidate_select, 
+            'value', 
+            backward=lambda ids: f"Valda: {', '.join(options_dict[i] for i in ids)}" if ids else "Ingen vald"
+        ).classes('text-lg font-bold mt-4')
+
+    with ui.row().classes('items-center gap-4 mt-6'):
+        contract_select = ui.select(
+            options={contract['contract_id']: contract['text'] for contract in contract_select_list},
+            label='choose contract',
+            on_change=lambda e: print(f"Vald kontrakt: {e.value}")
+        ).props('outlined').classes('w-64 text-lg')
+
+    
     async def run_analysis():
         results_container.clear()
         with results_container:
-            ui.spinner('dots', size='lg', color='red') # Visa att något händer
-        
-        # Kör det tunga anropet
-        response = await API_client.get_availability_job_contract(data)
+        # Skapa spinnern först
+            spinner = ui.spinner('dots', size='lg', color='red')
+            ui.label("Analysing availability...").classes('text-lg text-slate-700 mt-2')
+
+            # Kör API-anropet
+            data = {
+                "is_contract": True,
+                "contract_id": contract_select.value,
+                "candidate_ids": candidate_select.value,
+                "job_id": None,
+            }
+
+            response = await API_client.get_availability_job_contract(data)
+            print(f"Analysresultat: {response}")
+
+            # Ta bort spinnern
+            spinner.delete()
+
+    # Visa resultat
+            results_container.clear()
+            ui.label("Analys klar!").classes('text-green-600')
+
         candidates = response.get("candidates", [])
-        # candidates.sort(key=lambda x: x.suitability_score if hasattr(x, 'suitability_score') else 0, reverse=True)
         overall_summary = response.get("overall_summary", "No summary provided")
         # candidates = input_data.get("candidates", [])
         render_availability_grid(candidates)
         results_container.clear()
         with results_container:
             ui.label(f"OVERALL CONCLUSION:").classes('text-md font-black bold text-black-700')
-            ui.label(f"{overall_summary}").classes('text-md text-black-700')
+            ui.label(f"{overall_summary}").classes('text-lg text-black-700')
 
     # ui.button('Starta AI-Analys', on_click=run_analysis)
     ui.button('Starta AI-Analys', on_click=run_analysis)

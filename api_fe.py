@@ -87,19 +87,22 @@ class APIController:
         return await self._request("PATCH", f"/edit-job/{job_id}", json=job_data)
     
     async def job_status_update(self, job_id, status):
-        payload = JobStatusUpdateRequest(
-            job_id=job_id,
-            status=status
-        )
-        return await self._request("PATCH", "/update-job-status", json=payload.dict())
+        print("API job_status_update, job_id:", job_id, "status:", status)
+        return await self._request("PATCH", f"/update-job-status/{job_id}", params={"new_status": status})
 
     async def get_jobs_from_directory(self):
         return await self._request("GET", "/get-new-jobs-from-directory", timeout=60)
+    
+    async def get_job_selector_list(self):
+        return await self._request("GET", "/job-selector-list")
     
     
     # -----------------------------
     # CONTRACTS AND ALLOCATIONS
     # -----------------------------
+    
+    async def get_contract_selector_list(self):
+        return await self._request("GET", "/contract-selector-list")
 
     async def add_contract(self, contract_data):
         print("API add_contract, contract_data:", contract_data)
@@ -312,6 +315,10 @@ class APIController:
     
     async def get_internal_candidates(self):
         data = await self._request("GET", "/get-internal-candidates")
+        return data
+    
+    async def get_all_candidates_with_cv_and_basedata(self):
+        data = await self._request("GET", "/get-all-candidates-with-cv-and-basedata")
         return data
 
 
