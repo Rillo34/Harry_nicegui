@@ -325,6 +325,13 @@ class DataTable:
             self.table.on('cell-edit', self._on_cell_edit)
             self.table.on_select(self.update_selected_row)  # eller ditt lambda-notify
 
+            # def hasTotalCapacity(self, value):
+            #     """Returnerar True om raden är TOTAL CAPACITY UTILISATION (hanterar radbrytningar)"""
+            #     if not value or not isinstance(value, str):
+            #         return False
+            #     text = value.upper()
+            #     return 'TOTAL' in text and 'CAPACITY' in text and 'UTILISATION' in text
+
             for col in self.month_cols:
                 col_str = str(col)
                 self.table.add_slot(f'body-cell-{col_str}', f'''
@@ -339,6 +346,14 @@ class DataTable:
                         {{{{ props.value }}}}
                     </q-td>
                 ''')
+                # self.table.add_slot('body-cell-candidate_name', r'''
+                #     <q-td :props="props" 
+                #         class="cursor-pointer"
+                #         :class="hasTotalCapacity(props.row.candidate_name) ? 'bg-orange-4' : ''"
+                #         @click="$parent.$emit('cell-click', { row: props.row, col: 'candidate_name' })">
+                #         {{ props.value }}
+                #     </q-td>
+                # ''')
              
             # Valfrir "select all" checkbox i header (bra för multiple)
             if selection_mode == 'multiple':

@@ -125,8 +125,8 @@ async def availability_page():
 
     data = {
         "is_contract": True,
-        "contract_id": "ca1",
-        "candidate_ids": ["DS_71", "MN_45", "LJ_50", "GL_94", "YH_32", "AS_09", "PS_94"],
+        "contract_id": "d33",
+        "candidate_ids": ["BF_20", "ZQ_10", "QB_84", "GG_38", "DD_08", "RU_29", "RZ_61", "QW_48", "EM_94"],
         # "candidate_ids": ["DS_71", "GJ_99"],
         "job_id": ""
     }

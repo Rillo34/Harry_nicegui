@@ -82,15 +82,20 @@ class APIController:
     async def get_all_mails(self):
         return await self._request("GET", "/get-mails", timeout=60)
     
+    async def edit_job(self, job_id, job_data):
+        print("API edit_job, job_id:", job_id, "job_data:", job_data)
+        return await self._request("PATCH", f"/edit-job/{job_id}", json=job_data)
+    
     async def job_status_update(self, job_id, status):
         payload = JobStatusUpdateRequest(
             job_id=job_id,
             status=status
         )
-        return await self._request("POST", "/update-job-status", json=payload.dict())
+        return await self._request("PATCH", "/update-job-status", json=payload.dict())
 
     async def get_jobs_from_directory(self):
         return await self._request("GET", "/get-new-jobs-from-directory", timeout=60)
+    
     
     # -----------------------------
     # CONTRACTS AND ALLOCATIONS

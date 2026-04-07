@@ -14,6 +14,7 @@ class JobList:
         job_objects = [JobRequest(**j) for j in jobs]
         self.on_status_change = callbacks["on_status_change"] 
         self.status_options = callbacks["status_options"]
+        self.edit_job_callback = callbacks.get("edit_job")
         self.jobs_map = {j.job_id: j for j in job_objects}
         self.jobs_list = []
         self.hidden_columns = ["job_id"]
@@ -36,7 +37,7 @@ class JobList:
         #     'job_id', 'customer', 'title', 'contact_person', 'start_date', 'end_date', 'job_hours', 'duration', 'due_date',
         #     'days_left', 'candidates', 'highest_candidate_status', 'assigned_to', 'state', 'details', 'actions'
         # ]
-        exclude = { "musthave", "desirable", "description", "requirements", "expanded"}
+        exclude = { "musthave", "desirable", "description", "requirements", "expanded", "start_month", "end_month", "shortlist_size", "due_date", "assigned_to", "summary" }
 
         self.all_columns = [
             {
@@ -53,13 +54,100 @@ class JobList:
             {"name": "details", "label": "Details", "field": "details", "sortable": False, "align": "center"},
             {"name": "actions", "label": "", "field": "actions", "sortable": False, "align": "center"},
         ]
-        
-
         self.selected_columns = []
         self.columns = [col for col in self.all_columns if col['name'] not in self.hidden_columns]
-
         self._build_ui()
     
+# -----------------------------
+# API CALLS
+# -----------------------------
+
+    async def editing_job(self, row):
+        print("row for contract dialog:", row)
+        job_id = row.job_id if row else "new"
+        def year_month_list(year: int): 
+                return [f"{year}-{m:02d}" for m in range(1, 13)]
+
+        def to_year_month(value):
+            if value is None:
+                return None
+            if isinstance(value, (date, datetime)):
+                return value.strftime("%Y-%m")
+            if isinstance(value, str):
+                return datetime.fromisoformat(value).strftime("%Y-%m")
+            return None
+        
+        with ui.dialog() as dialog:
+            job_title = row.title if row else "New Job"
+            job_description= row.description if row else ""
+            job_total_hours = row.total_hours if row else 100
+            job_customer = row.customer if row else ""
+            job_job_type = row.job_type if row else ""
+            job_start_date = to_year_month(row.start_date) if row else None
+            job_end_date = to_year_month(row.end_date) if row else None
+            job_assigned_to = row.assigned_to if row else ""
+            year_month_list = year_month_list(2025) + year_month_list(2026)
+            async def save_and_close():
+                data = {
+                    "description": job_description.value,
+                    "total_hours": job_total_hours.value,
+                    "customer": job_customer.value,
+                    "job_type": job_job_type.value,
+                    "start_month": job_start_date.value,
+                    "end_month": job_end_date.value,
+                    "assigned_to": job_assigned_to.value,
+                }
+                await self.edit_job_callback(job_id, data)
+                dialog.close()
+            
+            with ui.card().classes('p-4 w-96'):
+                ui.label("Editing job").classes("text-lg font-bold mb-4")
+                job_description = ui.input(
+                    label="Job description",
+                    value=job_description
+                ).classes("w-full")
+                job_customer = ui.input(
+                    label="Customer",
+                    value=job_customer
+                ).classes("w-full")
+                with ui.grid(columns=2).classes("w-full gap-2 mt-4"):
+                    job_total_hours = ui.number(
+                        label="Job hours",
+                        value=job_total_hours,
+                        step=10,
+                        min=0
+                    ).classes("w-full")
+                    job_job_type = ui.select(
+                        options=["permanent", "consulting"],  # Replace with actual job types
+                        label="Job type",
+                        value=job_job_type
+                    ).classes("w-full")
+
+                # Bättre layout för selects
+                with ui.grid(columns=2).classes("w-full gap-2 mt-4"):
+                    job_start_date = ui.select(
+                        options=year_month_list,
+                        label="Start month",
+                        value=job_start_date
+                    ).classes("w-full")
+                    job_end_date = ui.select(
+                        options=year_month_list,
+                        label="End month",
+                        value=job_end_date
+                    ).classes("w-full")
+                job_assigned_to = ui.input(
+                    label="Assigned to",
+                    value=job_assigned_to
+                ).classes("w-full mt-4")
+                # Knappar
+                with ui.row().classes("justify-end gap-2 mt-4"):
+                    ui.button("Cancel", on_click=dialog.close)
+                    ui.button(
+                        "Save",
+                        on_click=lambda: save_and_close()
+                    ).classes("bg-blue-500 text-white")
+            dialog.open()
+
 
     def _build_ui(self):
         with ui.row().classes('items-center p-2').style('width: auto; background-color: #f5f5f5; border-radius: 8px;'):
@@ -172,6 +260,20 @@ class JobList:
             self.table.on('rowClick', lambda e: print(f"Row clicked: {e.args}"))
             self.table.on('toggle_expand', self._on_toggle_expand)
 
+    def update_jobs(self, new_jobs):
+        print("\n\nUpdating jobs with new data:\n")  # Debug: Verify incoming data
+        job_objects = [JobRequest(**j) for j in new_jobs]
+        self.jobs_map = {j.job_id: j for j in job_objects}
+        self.jobs_list = []
+        for job in job_objects:
+            job_dict = job.model_dump(exclude_none=False)
+            job_dict['musthave'] = [r.model_dump(exclude_none=True) for r in job.requirements if r.ismusthave]
+            job_dict['desirable'] = [r.model_dump(exclude_none=True) for r in job.requirements if not r.ismusthave]
+            job_dict['expanded'] = False
+            self.jobs_list.append(job_dict)
+        print("Updated jobs list:", self.jobs_list)  # Debug: Verify updated jobs_list
+        self.table.rows = self.jobs_list
+        self.table.update()
     
     def _update_columns(self, e):
         self.hidden_columns = e.value if e.value else []
@@ -179,10 +281,6 @@ class JobList:
             col for col in self.all_columns
             if col['name'] not in self.hidden_columns
         ]
-        # self.columns = sorted(
-        #     self.columns,
-        #     key=lambda col: self.preferred_column_order.index(col['name']) if col['name'] in self.preferred_column_order else len(self.preferred_column_order)
-        # )
         self.table.columns = [col for col in self.columns if col['name'] not in ['musthave', 'desirable']]
         self.table.update()
 
@@ -202,7 +300,7 @@ class JobList:
         job_state = payload.get('new_status')
         await self.on_status_change(job_id, job_state)
 
-    def _on_action(self, event):
+    async def _on_action(self, event):
         print("--- _on_action triggered ---")
         print(f"Event args: {event.args}")
         payload = event.args
@@ -221,7 +319,10 @@ class JobList:
             ui.navigate.to(f'/candidatejobs?job_id={row.job_id}')
             ui.notify(f"Navigating to candidate job {row.title}", type='info')
         elif action == 'edit':
-            ui.notify(f"Editing {row.title}", type='warning')
+            ui.notify(f"Editing {row.title}", type='info')
+            await self.editing_job(row)
         elif action == 'delete':
             ui.notify(f"Deleting {row.title}", type='negative')
+    
+
 
