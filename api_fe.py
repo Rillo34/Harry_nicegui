@@ -37,17 +37,17 @@ class APIController:
                     files=files,
                 )
 
-            # --- 2️⃣ Response info ---
-            print("===== RESPONSE DEBUG =====")
-            print("Status code:", response.status_code)
-            print("Headers:", response.headers)
-            print("Response text:", response.text)
-            print("Response JSON (attempt to parse):")
-            try:
-                print(response.json())
-            except Exception as e:
-                print("Could not parse JSON:", e)
-            print("==========================")
+            # # --- 2️⃣ Response info ---
+            # print("===== RESPONSE DEBUG =====")
+            # print("Status code:", response.status_code)
+            # print("Headers:", response.headers)
+            # print("Response text:", response.text)
+            # print("Response JSON (attempt to parse):")
+            # try:
+            #     print(response.json())
+            # except Exception as e:
+            #     print("Could not parse JSON:", e)
+            # print("==========================")
 
             # --- 3️⃣ Kontrollera statuskod ---
             if response.status_code != 200:
@@ -130,15 +130,15 @@ class APIController:
     
     async def delete_allocations(self, allocation_list):
         payload = [
-            ContractAllocationRequest(
+            ContractAllocationChangeRequest(
                 contract_id=item["contract_id"],
                 candidate_id=item["candidate_id"],
                 change=None
             ).dict()
             for item in allocation_list
         ]
-        print("Payload for delete_allocation:", payload)
-        return await self._request("POST", "/delete-allocation", json=payload)
+        # print("Payload for delete_allocation:", payload)
+        return await self._request("DELETE", "/delete-allocation", json=payload)
     
     async def change_allocation(self, change_list):
         payload = [

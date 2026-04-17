@@ -152,6 +152,7 @@ async def availability_page():
             multiple=True,
             on_change=on_change
         ).props('outlined').classes('w-64 text-lg')
+        
 
         ui.label().bind_text_from(
             candidate_select, 
@@ -165,6 +166,11 @@ async def availability_page():
             label='choose contract',
             on_change=lambda e: print(f"Vald kontrakt: {e.value}")
         ).props('outlined').classes('w-64 text-lg')
+        job_select = ui.select(
+            options={job['job_id']: job['text'] for job in job_select_list},
+            label='choose job',
+            on_change=on_change
+        ).props('outlined').classes('w-64 text-lg')
 
     
     async def run_analysis():
@@ -173,33 +179,31 @@ async def availability_page():
         # Skapa spinnern först
             spinner = ui.spinner('dots', size='lg', color='red')
             ui.label("Analysing availability...").classes('text-lg text-slate-700 mt-2')
-
-            # Kör API-anropet
+            if contract_select.value:
+                job_to_test = contract_select.value
+            else:
+                job_to_test = job_select.value
             data = {
                 "is_contract": True,
                 "contract_id": contract_select.value,
                 "candidate_ids": candidate_select.value,
                 "job_id": None,
             }
-
             response = await API_client.get_availability_job_contract(data)
             print(f"Analysresultat: {response}")
-
-            # Ta bort spinnern
             spinner.delete()
-
-    # Visa resultat
             results_container.clear()
             ui.label("Analys klar!").classes('text-green-600')
 
         candidates = response.get("candidates", [])
         overall_summary = response.get("overall_summary", "No summary provided")
         # candidates = input_data.get("candidates", [])
-        render_availability_grid(candidates)
         results_container.clear()
         with results_container:
             ui.label(f"OVERALL CONCLUSION:").classes('text-md font-black bold text-black-700')
             ui.label(f"{overall_summary}").classes('text-lg text-black-700')
+            render_availability_grid(candidates)
+
 
     # ui.button('Starta AI-Analys', on_click=run_analysis)
     ui.button('Starta AI-Analys', on_click=run_analysis)

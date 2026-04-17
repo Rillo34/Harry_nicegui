@@ -45,7 +45,7 @@ class DataTable:
         self.add_contract = callbacks.get("add_contract")
         self.delete_contract = callbacks.get("delete_contract")
         self.edit_contract = callbacks.get("edit_contract")
-        print("top rows in init", top_rows)
+        self.nr_of_top_rows = 3 if perc_table else 1
         self.group_mode = "None"
         self.enable_buttons = True
         self.selected_rows = []
@@ -71,26 +71,50 @@ class DataTable:
 # API CALLS
 # -----------------------------
 
-    async def delete_row (self):
-        print("ska deleta rows:", self.selected_rows)
-        if self.selected_rows:
-            await self.delete_allocation (self.selected_rows)
-        else:
+    async def delete_row(self):
+        if not self.selected_rows:
             ui.notify("No rows selected for deletion", color="red")
+            return
+        for row in self.selected_rows:
+            payload=[{"contract_id":row["contract_id"],"candidate_id":row["candidate_id"]}]
+            await self.delete_allocation(payload)
+        ids={(r["contract_id"],r["candidate_id"]) for r in self.selected_rows}
+        self.table.rows=[r for r in self.table.rows if (r["contract_id"],r["candidate_id"]) not in ids]
+        self.selected_rows.clear()
+        self.df_latest = self.df_latest[
+            ~self.df_latest[["contract_id","candidate_id"]].apply(tuple, axis=1).isin(ids)
+        ]
+        self.update(self.df_latest)
+
     
     async def change_alloc(self, step):
-        print("ska ändra row:s:", self.selected_rows, "med step:", step)
         if not self.selected_rows:
-            ui.notify("No rows selected for changing allocation", color="red")
+            ui.notify("No rows selected", color="red")
             return
+        # print(f"Changing allocation by {step*100:.0f}% for rows: {self.table.selected}")
+
+        # delta = step / 100  # 10 -> 0.1, -10 -> -0.1
+        
+
+        # for r in self.selected_rows:
+        #     mask = (self.df.contract_id == r["contract_id"]) & (self.df.candidate_id == r["candidate_id"])
+        #     row = self.df.loc[mask]
+        #     print(row)
+        #     for m in self.month_cols:
+        #         self.df.loc[mask, m] = (
+        #             pd.to_numeric(self.df.loc[mask, m], errors="coerce")
+        #             .fillna(0)
+        #             + delta
+        #         ).round(1)
+        # print("AFTER UPDATE:")
+        # print(self.df.loc[mask, self.month_cols])
+        # self.update(self.df)
         await self.change_step_alloc(self.selected_rows, step=step)
 
-    async def change_cell_alloc(self, row, col, new_value):
-        print("ska ändra en cell", row, col, new_value)
-        await self.change_cell_alloc(row, col, new_value)
+
+
 
     async def add_alloc(self):
-        print("ska lägga till allocation")
         if not self.selected_rows:
             ui.notify("No rows selected for adding allocation", color="red")
             return
@@ -102,12 +126,31 @@ class DataTable:
         current_contract = row[0]['contract_id']
         with ui.dialog() as dialog:
             async def save_and_close():
-                await self.add_allocation(
-                    row,
-                    candidate_select.value,
-                    percent_input.value,
+
+                orig = self.df[
+                    (self.df.contract_id == row[0]["contract_id"]) &
+                    (self.df.candidate_id == row[0]["candidate_id"])
+                ].iloc[0]
+
+                new = orig.copy()
+                # new["candidate_id"] = candidate_select.value
+                new["candidate_name"] = candidate_select.value
+                # new["candidate_name"] = self.df_latest.loc[self.df_latest['candidate_id'] == candidate_select.value, 'candidate_name'].values[0]
+                new["id"] = f'{orig.contract_id}_{candidate_select.value}'
+
+                for m in self.month_cols:
+                    new[m] = round(orig[m] * (percent_input.value / 100), 1) if orig[m] > 0 else 0
+
+                idx = orig.name
+                self.df = pd.concat(
+                    [self.df.iloc[:idx+1], new.to_frame().T, self.df.iloc[idx+1:]],
+                    ignore_index=True
                 )
+
+                self.update(self.df)
                 dialog.close()
+                await self.add_allocation(row, candidate_select.value, percent_input.value)
+
             with ui.card().classes('p-4 w-96'):
                 ui.label(f"Adding allocation to contract {current_contract}").classes("text-lg font-bold mb-4")
                 candidate_select = ui.select(
@@ -242,31 +285,32 @@ class DataTable:
         await self.delete_contract(contract_id)
 
 
-#---------------------------------
-# RENDER AND UPDATE
-# -----------------------------
-
-    def update(self, new_df: pd.DataFrame, top_rows=None, group_by = False):
-        self.table.update_from_pandas(new_df)
-        if top_rows:
-            self.capacity_dict = top_rows.get("capacity", {})
-            self.average_dict = top_rows.get("utilisation", {})
-            self.add_top_rows()
-        if self.is_summary:
-            self.add_summary_row()
-            self.filtered_df = new_df.copy()
-            self.table.rows = [self.summary_row] + self.top_rows + self._format_rows(self.filtered_df.to_dict(orient='records'))  # 3. Uppdatera UI med både summary och top rows
-            self.table.update()
-            return
-        
-        
-        filtered = self._format_rows(filtered)
-        self.table.rows = filtered
+    def update(self, new_df: pd.DataFrame, top_rows = None ):
+        # 1. Uppdatera FE-DF
+        self.top_rows = top_rows if top_rows is not None else []
+        self.df = new_df.copy()
+        self.df[self.month_cols]=self.df[self.month_cols].apply(pd.to_numeric,errors="coerce").fillna(0)
+        self.add_summary_row()
+        self.add_top_rows()
+        rows = (
+            self.top_rows +
+            [self.summary_row] +
+            self._format_rows(self.df.to_dict(orient="records"))
+        )
+        self.table.rows = rows
         self.table.update()
 
 
     def render(self):
         df = self.df.copy()
+            # summary_df = pd.DataFrame([
+            #     {"label": "CAPACITY", "2026-04": 160, "2026-05": 152, "2026-06": 168},
+            #     {"label": "TOTAL",    "2026-04": 124, "2026-05": 118, "2026-06": 132},
+            #     {"label": "UTIL%",    "2026-04": "78%", "2026-05": "78%", "2026-06": "79%"},
+            # ])
+            # print(summary_df)
+            # self.summary_table = ui.table.from_pandas(summary_df).props('dense')
+
         self.filter_container = ui.row().classes("w-full items-center")
         with self.filter_container:
             if self.alloc_table:
@@ -308,44 +352,49 @@ class DataTable:
             selection_mode = 'single'  # eller 'none'
 
         columns = [{'name': 'selection', 'label': '', 'field': 'selection', 'sortable': False}] + [
-            {'name': c, 'label': c, 'field': c, 'sortable': True}
+            {'name': c, 'label': c, 'field': c, 'sortable': True, 'align': 'left'}
             for c in self.visible_columns]
-
-        with ui.card().classes('w-full') as container:
-            container.style('height: 700px;')
-
+        
+        self.table_container = ui.row().classes("w-full items-center").style('overflow-x: auto; height: 700px;')  # Lägg till horisontell scroll vid behov
+        with self.table_container:
             self.table = ui.table(
-                columns=columns,
-                rows=rows,
-                row_key="id",
-                selection=selection_mode,
-                pagination={"rowsPerPage": 20}
-            ).props('dense').classes('w-full no-wrap sticky-header')
+            columns=columns,
+            rows=rows,
+            row_key="id",
+            selection=selection_mode,
+            pagination={"rowsPerPage": 20}
+        ).props('dense').classes('w-full no-wrap sticky-header')
 
-            self.table.on('cell-edit', self._on_cell_edit)
-            self.table.on_select(self.update_selected_row)  # eller ditt lambda-notify
+            top_cols = self.month_cols + ['candidate_name']
 
-            # def hasTotalCapacity(self, value):
-            #     """Returnerar True om raden är TOTAL CAPACITY UTILISATION (hanterar radbrytningar)"""
-            #     if not value or not isinstance(value, str):
-            #         return False
-            #     text = value.upper()
-            #     return 'TOTAL' in text and 'CAPACITY' in text and 'UTILISATION' in text
-
-            for col in self.month_cols:
+            for col in top_cols:
                 col_str = str(col)
-                self.table.add_slot(f'body-cell-{col_str}', f'''
-                    <q-td :props="props" class="cursor-pointer" 
-                        @click="$parent.$emit('cell-click', {{ row: props.row, col: '{col_str}' }})">
+                self.table.add_slot(
+                    f'body-cell-{col_str}',
+                    f'''
+                    <q-td :props="props"
+                        class="cursor-pointer"
+                        @click="$parent.$emit('cell-click', {{ row: props.row, col: '{col_str}', rowIndex: props.rowIndex }})"
+                        :style="props.rowIndex < {self.nr_of_top_rows} ? 'background-color: #ffe082' : ''">
                         {{{{ props.value }}}}
                     </q-td>
-                ''')
-                self.table.add_slot(f'body-cell-notes', f'''
-                    <q-td :props="props" class="cursor-pointer" 
-                        @click="$parent.$emit('notes-click', {{ row: props.row, col: 'notes' }})">
-                        {{{{ props.value }}}}
-                    </q-td>
-                ''')
+                    '''
+                )
+
+            self.table.add_slot(f'body-cell-notes', f'''
+                <q-td :props="props" class="cursor-pointer" 
+                    @click="$parent.$emit('notes-click', {{ row: props.row, col: 'notes' }})">
+                    {{{{ props.value }}}}
+                </q-td>
+            ''')
+            self.table.add_slot(f'body-cell-fill_up', f'''
+                <q-td :props="props" 
+                    :style="parseFloat(props.value) < 100 
+                        ? 'background-color: #d1fae5; color: #065f46' 
+                        : 'background-color: #fee2e2; color: #991b1b'">
+                    {{{{ props.value }}}}
+                </q-td>
+            ''')
                 # self.table.add_slot('body-cell-candidate_name', r'''
                 #     <q-td :props="props" 
                 #         class="cursor-pointer"
@@ -362,7 +411,8 @@ class DataTable:
                         <q-checkbox dense v-model="props.selected" @click.stop="props.selectAll(false)" />
                     </q-th>
                 ''')
-        self.table.on('cell-click', lambda e: self.open_edit_dialog(e.args['row'], e.args['col'])) # Lyssna på custom eventet och visa notis
+        self.table.on_select(self.update_selected_row)  # eller ditt lambda-notify
+        self.table.on('cell-click', lambda e: self.open_edit_dialog(e.args['row'], e.args['col'], e.args['rowIndex'])) # Lyssna på custom eventet och visa notis
         self.table.on('notes-click', lambda e: self.open_notes_dialog(e.args['row'], e.args['col'])) # Lyssna på custom eventet och visa notis
         # self.table.on('notes-click', lambda e: ui.notify(f"Notes clicked for row: {e.args['row']}, column: {e.args['col']}")) # Lyssna på custom eventet och visa notis
         
@@ -425,15 +475,14 @@ class DataTable:
             )
         df["Total"] = df[self.month_cols].sum(axis=1)
         df = df.round(1)
-        self.update(df, group_by=True)
+        self.update(df)
 
-    def _on_cell_edit(self, e): 
-        print("Cell edit event args:", e.args)
-        data = e.args[0] 
-        ui.notify(f"Saving value {data['value']} for contract {data['contract_id']}, candidate {data['candidate_id']}, month {data['month']}")
 
-    def open_edit_dialog(self, row, col):
-        print(f"Opening edit dialog for row: {row}, column: {col}")
+    def open_edit_dialog(self, row, col, rowIndex):
+        print(f"Opening edit dialog for row: {row}, column: {col}, rowIndex: {rowIndex} ")
+        if rowIndex < self.nr_of_top_rows:  # Första två raderna är summary och capacity, som inte ska redigeras
+            ui.notify("This row cannot be edited", color="red")
+            return
         try:
             real_value = self.df_latest.loc[self.df_latest['id'] == row['id'], col].values[0]
             print(f"Real value from DF for contract_id {row['contract_id']}, candidate_id {row['candidate_id']}, month {col}: {real_value}")
@@ -446,8 +495,10 @@ class DataTable:
             initial_value = 0.0
 
         async def save_edit():
-            new_value = self.edit_value.value
+            new_value = float(self.edit_value.value or 0)
             edit_dialog.close()
+            self.df.loc[self.df['id'] == row['id'], col] = new_value
+            self.update(self.df)
             await self.change_cell_alloc(row, col, new_value)
 
         with ui.dialog() as edit_dialog, ui.card():
@@ -549,50 +600,89 @@ class DataTable:
 # HELPER FUNCTIONS
 # -----------------------------
 
+    # def add_summary_row(self):
+    #     summary = {}
+    #     if self.df_latest.empty:
+    #         for col in self.df_latest.columns:
+    #             summary[col] = ''
+    #     else:
+    #         for col in self.filtered_df.columns:
+    #             if col in self.month_cols:
+    #                 summary[col] = round(self.filtered_df[col].sum(), 1)
+    #             else:
+    #                 summary[col] = ''
+    #     summary["candidate_name"] = "TOTAL"  # eller "Summary"
+    #     summary["id"] = "summary"  # Viktigt för att inte kollidera med riktiga rader
+    #     self.summary_row = summary
     def add_summary_row(self):
-        summary = {}
-        if self.df_latest.empty:
-            for col in self.df_latest.columns:
-                summary[col] = ''
-        else:
-            for col in self.filtered_df.columns:
-                if col in self.month_cols:
-                    summary[col] = round(self.filtered_df[col].sum(), 1)
-                else:
-                    summary[col] = ''
-        summary["candidate_name"] = "TOTAL"  # eller "Summary"
-        summary["id"] = "summary"  # Viktigt för att inte kollidera med riktiga rader
+        summary = {
+            col: round(self.filtered_df[col].sum(), 1) if col in self.month_cols else ''
+            for col in self.filtered_df.columns
+        }
+        summary["candidate_name"] = "TOTAL"
+        summary["id"] = "summary"
         self.summary_row = summary
 
     def add_top_rows(self):
         self.top_rows = []
 
         # --- CAPACITY ---
-        capacity = {}
-        print("Adding capacity row with dict:", self.capacity_dict)
-        for col in self.filtered_df.columns:
-            if col in self.month_cols:
-                capacity[col] = self.capacity_dict.get(col, '')
-            else:
-                capacity[col] = ''
+        capacity = {
+            col: self.capacity_dict.get(col, '') if col in self.month_cols else ''
+            for col in self.filtered_df.columns
+        }
         capacity["candidate_name"] = "CAPACITY"
         capacity["id"] = "summary_capacity"
         self.top_rows.append(capacity)
-        # --- AVERAGE ---
-        avg = {}
-        print("Adding average row with dict:", self.average_dict)
+
+        # --- UTILISATION (TOTAL / CAPACITY) ---
+        utilisation = {}
         for col in self.filtered_df.columns:
             if col in self.month_cols:
-                # avg[col] = round(self.average_dict.get(col, 0), 2)
-                # eller procent:
-                avg[col] = f"{self.average_dict.get(col, 0) * 100:.0f}%"
+                cap = self.capacity_dict.get(col, 0)
+                total = self.summary_row.get(col, 0)
+
+                if cap and cap != 0:
+                    utilisation[col] = f"{(total / cap) * 100:.0f}%"
+                else:
+                    utilisation[col] = ""
             else:
-                avg[col] = ''
-        avg["candidate_name"] = "UTILISATION"
-        avg["id"] = "summary_average"
-        print("Average row to add:", avg)
-        self.top_rows.append(avg)
-        print("Top rows after adding average:", self.top_rows)
+                utilisation[col] = ""
+
+        utilisation["candidate_name"] = "UTILISATION"
+        utilisation["id"] = "summary_average"
+        self.top_rows.append(utilisation)
+
+
+    # def add_top_rows(self):
+    #     self.top_rows = []
+
+    #     # --- CAPACITY ---
+    #     capacity = {}
+    #     print("Adding capacity row with dict:", self.capacity_dict)
+    #     for col in self.filtered_df.columns:
+    #         if col in self.month_cols:
+    #             capacity[col] = self.capacity_dict.get(col, '')
+    #         else:
+    #             capacity[col] = ''
+    #     capacity["candidate_name"] = "CAPACITY"
+    #     capacity["id"] = "summary_capacity"
+    #     self.top_rows.append(capacity)
+    #     # --- AVERAGE ---
+    #     avg = {}
+    #     print("Adding average row with dict:", self.average_dict)
+    #     for col in self.filtered_df.columns:
+    #         if col in self.month_cols:
+    #             # avg[col] = round(self.average_dict.get(col, 0), 2)
+    #             # eller procent:
+    #             avg[col] = f"{self.average_dict.get(col, 0) * 100:.0f}%"
+    #         else:
+    #             avg[col] = ''
+    #     avg["candidate_name"] = "UTILISATION"
+    #     avg["id"] = "summary_average"
+    #     print("Average row to add:", avg)
+    #     self.top_rows.append(avg)
+    #     print("Top rows after adding average:", self.top_rows)
 
     def update_selected_row(self, e):
         self.selected_rows = self.table.selected

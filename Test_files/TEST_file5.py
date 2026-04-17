@@ -4,6 +4,7 @@ from matplotlib.pyplot import grid
 from nicegui import ui
 import plotly.express as px
 from faker import Faker
+from torch import classes
 from backend.models import JobCandidateScore
 import random
 from typing import List
@@ -24,6 +25,7 @@ def generate_test_data(n_candidates: int, n_jobs: int):
     fake = Faker('sv_SE')
     
     # Generera unika namn (set för att undvika dubbletter)
+    candidate_id_list = [f'cand_{i+1:04d}' for i in range(n_candidates)]
     candidate_list = []
     while len(candidate_list) < n_candidates:
         name = fake.name()
@@ -49,32 +51,52 @@ def generate_scores_df(candidates: List[str], jobs: List[str]) -> pd.DataFrame:
     for cand in candidates:
         project_load = random.randint(0, 4)
         project_names = [fake.catch_phrase() for _ in range(project_load)]
-        
+        cand_id = f"cand_{hash(cand) % 10000:04d}"  # Enkel hash för ID
         for j_id in jobs:
             comp_score = round(random.uniform(1, 100), 0)
-            
-            # Availability logic based on project load
-            # Base score decreases by ~20% for every active project
             base_avail = random.uniform(80, 100) if project_load == 0 else random.uniform(10, 90)
-            avail_score = max(0, round(base_avail - (project_load * 15), 0))
-
+            avail_score = max(15, round(base_avail - (project_load * 15), 0))
             job = job_registry[j_id]
+            competence_phrases_high = [
+                "Exceeds all requirements and demonstrates deep, proven expertise.",
+                "Meets every requirement and adds relevant specialist knowledge.",
+                "Aligns well with the role and has clear experience from similar projects.",
+                "Shows solid competence and is expected to deliver with minimal support.",
+            ]
+            competence_phrases_low = [
+                "Meets several requirements and can perform with some onboarding.",
+                "Has basic competence but lacks experience in key areas.",
+                "Matches only a few requirements and will need significant support.",
+                "Does not meet the competence level required for the project."
+            ]
+            availability_phrases_high = [
+                "Fully available and able to start immediately.",
+                "Able to start shortly with high availability.",
+                "Available within a reasonable timeframe and can adapt to project needs.",
+                "Has some current commitments but can prioritize this project effectively."
+            ]
+            availability_phrases_low = [
             
+                "Available part‑time with potential to increase capacity later.",
+                "Limited availability and can only contribute in a smaller scope.",
+                "Only sporadically available, making planning difficult.",
+                "Not available within the project’s required timeframe."
+            ]
+
             # Contextual summaries
             comp_summary = (
-                f"Matches technical stack for {job['job_title']}."
-                if comp_score > 60 else
-                f"Gap identified in required niche skills for {job['customer']}."
+                random.choice(competence_phrases_high) if comp_score > 60 else
+                random.choice(competence_phrases_low)
             )
 
-            if project_load == 0:
-                avail_summary = "Fully available. No current project assignments."
-            else:
-                avail_summary = f"Capacity limited by {project_load} active projects: {', '.join(project_names)}."
+            avail_summary = (
+                random.choice(availability_phrases_high) if avail_score > 60 else
+                random.choice(availability_phrases_low)
+            )
 
             rows.append({
                 "candidate_name": cand,
-                "candidate_id": random.randint(1000, 9999),
+                "candidate_id": cand_id,  # En enkel hash för ID
                 "job_id": j_id,
                 "job_title": job['job_title'],
                 "customer": job['customer'],
@@ -122,26 +144,6 @@ def get_sorted_candidates(df, job_id, metric="comp_score"):
 # --------------------------
 
 class FilterControl:
-    def __init__(self, on_change):
-        self.on_change = on_change
-        self.filters = {'min_comp': 0, 'min_avail': 0}
-        self.sliders = {}
-
-    def build(self): # Denna anropas där den ska synas
-        with ui.column().classes('w-full p-6 bg-slate-50 rounded-xl mb-4 border'):
-            ui.label('Filters').classes('font-bold')
-            self.sliders['comp'] = ui.slider(min=0, max=100).bind_value(self.filters, 'min_comp').on('update:model-value', self.on_change)
-            self.sliders['avail'] = ui.slider(min=0, max=100).bind_value(self.filters, 'min_avail').on('update:model-value', self.on_change)
-
-    def reset(self):
-        self.filters['min_comp'] = 0
-        self.filters['min_avail'] = 0
-        # Uppdatera slider-komponenterna så de visuellt hoppar tillbaka
-        self.sliders['comp'].value = 0
-        self.sliders['avail'].value = 0
-        self.on_change()
-
-class FilterControl2:
     def __init__(self, on_change):
         self.on_change = on_change
         self.filters = {'min_comp': 0, 'min_avail': 0}
@@ -317,77 +319,158 @@ class PlotTable:
             self.count_label.text = f'Antal rader i table: {len(self.df)}'
 
 class ScoreGrid:
-    def __init__(self, df, flipped=False):
-        print("Initializing ScoreGrid with DataFrame")
+    def __init__(self, df, flipped=False, mode='candidate'):
         self.df = df
         self.flipped = flipped
+        self.mode = mode
         self.sort_job = None
         self.sort_candidate = None
         self.sort_metric = "comp_score"
         self.rendered = False
+        self.comb_weight = 50
+        self.selected_jobs = []
+        self.selected_candidates = []
+        print("Initializing ScoreGrid with DataFrame of shape:", df.shape)
+        df.info()
         self.render()
 
+    def update_comb_score(self, e):
+        self.comb_weight = e.value
+        ui.notify(f"Updating combined score: Comp {e.value}% - Avail {100 - e.value}%", color='primary')
+        comp_part = self.orig_df['comp_score'] * (self.comb_weight / 100)
+        avail_part = self.orig_df['availability_score'] * ((100 - self.comb_weight) / 100)
+        self.orig_df['combined_score'] = round(comp_part + avail_part, 0)
+        self.update_df()
+        if self.sort_metric == 'combined_score':
+            self.render()
+
+
     def update(self, flipped=None, sort_job=None, sort_candidate=None, sort_metric=None):
-        print("Updating ScoreGrid")
         if flipped is not None:
             self.flipped = flipped
         if sort_job is not None:
             if sort_job == self.sort_job:
-                sort_job = None  # Toggle off if same job clicked again
-                self.summary_label.text = ''  # Clear summary when toggling off
+                sort_job = None
+                self.summary_label.text = ''
             self.sort_job = sort_job
-            self.sort_candidate = None  # Reset other sort
+            self.sort_candidate = None
         if sort_candidate is not None:
             if sort_candidate == self.sort_candidate:
-                sort_candidate = None  # Toggle off if same candidate clicked again
-                self.summary_label.text = ''  # Clear summary when toggling off 
+                sort_candidate = None
+                self.summary_label.text = ''
             self.sort_candidate = sort_candidate
-            self.sort_job = None  # Reset other sort
+            self.sort_job = None
         if sort_metric is not None:
             self.sort_metric = sort_metric
-        
         self.render()
+    
+    def apply_selection(self):
+        self.render()
+        ui.notify(f"Applying selection: {len(self.selected_candidates.value)} candidates, {len(self.selected_jobs.value)} jobs", color='primary')
+        
+    def clear_selection(self):
+        self.selected_candidates.value = []
+        self.selected_jobs.value = []
+        self.render()
+        ui.notify("Cleared selection", color='primary')
 
     def render(self):
-        # 1. Använd self.container istället för att skapa ny
         if not self.rendered:
-            with ui.row().classes('m-4 gap-4'):
-                ui.button('Flip View', icon='swap_horiz', on_click=lambda: self.update(flipped=not self.flipped))
-                # ui.button('Reset', icon='refresh', on_click=lambda: self.update())
-                # select = ui.select(['comp_score', 'availability_score'], label='Sort Metric', 
-                                # value=self.sort_metric, on_change=lambda e: self.update(sort_metric=e.value)).classes('w-48')
-                with ui.column().classes('gap-1'):
-                    ui.label('Sort metric:').classes('text-sm text-gray-600')
-                    ui.radio(['comp_score', 'availability_score'], value=self.sort_metric, on_change=lambda e: self.update(sort_metric=e.value)).classes('w-48')
-                ui.label('Click on headers to sort.\nClick again to toggle.').style('white-space: pre-line')                
-                # ui.label('Click again to toggle off sorting.').classes('text-sm text-gray-600')
-                self.summary_label = ui.label('') \
-                    .classes('text-md border-2 p-4 rounded-md border-blue-200 bg-slate-50 shadow-sm') \
-                    .style('white-space: pre-line; margin-top: 10px; line-height: 1.5;')
+            self.container = ui.column().classes('w-full gap-4')
+
+            with self.container:
+                ui.label("ScoreGrid").classes('text-lg font-bold text-slate-700')
+
+                with ui.row().classes('items-center gap-4 w-full'):
+                    with ui.column().classes('gap-2 w-1/2'):
+                        ui.label(
+                            "Grid shows the best matches based on the selected metric. "
+                            "Click on Flip View to change perspective."
+                        ).classes('text-xs text-slate-500 w-full outline outline-1 outline-slate-200 p-2 rounded')
+
+                    with ui.column().classes('gap-2 w-1/2'):
+                        self.summary_label = ui.label('').classes(
+                            'w-full text-md border-2 p-4 rounded-md border-blue-200 bg-slate-50 shadow-sm'
+                        ).style('white-space: pre-line; margin-top: 10px; line-height: 1.5;')
+
+                with ui.row().classes('items-end gap-8 mb-6'):
+                    with ui.column().classes('gap-1'):
+                        ui.label('Sort metric:').classes('text-[10px] font-bold text-slate-400 uppercase tracking-wider')
+                        ui.radio(
+                            ['comp_score', 'availability_score', 'combined_score'],
+                            value=self.sort_metric,
+                            on_change=lambda e: self.update(sort_metric=e.value)
+                        ).props('dense').classes('text-sm')
+
+                    ui.button(
+                        'Flip View', icon='swap_horiz',
+                        on_click=lambda: self.update(flipped=not self.flipped)
+                    ).props('flat outline dense').classes('mb-1')
+
+                    with ui.column().classes('gap-1'):
+                        ui.label('Combined Score Weight:').classes('text-[12px] font-bold text-slate-400 uppercase tracking-wider')
+                        comp_score_slider = ui.slider(
+                            min=0, max=100, value=self.comb_weight, step=10,
+                            on_change=self.update_comb_score
+                        ).props('color=blue').classes('w-48')
+                        ui.label().classes('text-xs font-mono w-full').style('white-space: pre-line').bind_text_from(
+                            comp_score_slider, 'value',
+                            backward=lambda v: f'{int(v)}% Comp\n{100 - int(v)}% Avail'
+                        )
+                    with ui.column().classes('gap-1'):
+                        self.selected_candidates = ui.select(
+                            options=list(self.df['candidate_name'].unique()),
+                            label="Filter Candidates",
+                            multiple=True
+                        ).props('clearable dense outlined').classes('w-48')
+
+                        self.selected_jobs = ui.select(
+                            options=list(self.df['job_title'].unique()),
+                            label="Filter Jobs",
+                            multiple=True
+                        ).props('clearable dense outlined').classes('w-48')
+                    ui.button('Apply Selection', on_click=self.apply_selection).props('color=primary').classes('mt-2').bind_visibility_from(self.selected_candidates, 'value', backward=lambda v: bool(v) or bool(self.selected_jobs.value)) 
+                    ui.button('Reset Selection', on_click=self.clear_selection).props('flat').classes('mt-2')
+             
+            self.grid_container = ui.column().classes('w-full overflow-auto')
             self.rendered = True
-            self.container = ui.column().classes('gap-2')
 
+        candidates = self.selected_candidates.value if self.selected_candidates.value else list(self.df['candidate_name'].unique())[:5]
+        jobs = self.selected_jobs.value if self.selected_jobs.value else list(self.df['job_title'].unique())[:5]
 
-        self.container.clear()
-
-        # 2. Använd self.df och self.sort_job etc. direkt
-        jobs = list(self.df['job_title'].unique())
-        candidates = list(self.df['candidate_name'].unique())
-
-        # --- Sorteringslogik (Använd self överallt) ---
+        # --- Sortering ---
         if self.sort_job:
-            sorted_df = self.df[self.df.job_title == self.sort_job].sort_values(self.sort_metric, ascending=False)
+            # sortera bara inom valda kandidater
+            filtered = self.df[
+                (self.df.job_title == self.sort_job) &
+                (self.df.candidate_name.isin(candidates))
+            ]
+            sorted_df = filtered.sort_values(self.sort_metric, ascending=False)
             candidates = sorted_df['candidate_name'].tolist()
+
             customer_map = self.df.set_index('job_title')['customer'].to_dict()
-            self.summary_label.text = f"Best fit for {self.sort_job} - {customer_map.get(self.sort_job, 'Unknown Customer')} :\n{', '.join(candidates[:3])} based on {self.sort_metric}"
+            self.summary_label.text = (
+                f"Best fit for {self.sort_job} - {customer_map.get(self.sort_job, 'Unknown Customer')} :\n"
+                f"{', '.join(candidates[:3])} based on {self.sort_metric}"
+            )
 
         if self.sort_candidate:
-            sorted_jobs = self.df[self.df.candidate_name == self.sort_candidate].sort_values(self.sort_metric, ascending=False)
+            # sortera bara inom valda jobb
+            filtered = self.df[
+                (self.df.candidate_name == self.sort_candidate) &
+                (self.df.job_title.isin(jobs))
+            ]
+            sorted_jobs = filtered.sort_values(self.sort_metric, ascending=False)
             jobs = sorted_jobs['job_title'].tolist()
+
             job_customers = sorted_jobs['customer'].tolist()
             job_list = [f"{j} ({c})" for j, c in zip(jobs, job_customers)]
-            self.summary_label.text = f"Best matches for candidate {self.sort_candidate}:\n{', '.join(job_list[:3])} based on {self.sort_metric}"
-        # --- Bestäm Axlar ---
+            self.summary_label.text = (
+                f"Best matches for candidate {self.sort_candidate}:\n"
+                f"{', '.join(job_list[:3])} based on {self.sort_metric}"
+            )
+
+
         if not self.flipped:
             x_items, y_items = jobs, candidates
             x_col, y_col = 'job_title', 'candidate_name'
@@ -398,13 +481,13 @@ class ScoreGrid:
             focus_x, focus_y = self.sort_candidate, self.sort_job
 
         pivot = self.df.set_index([y_col, x_col])
-
-        # 3. Rita inuti self.container
-        with self.container:
+        self.grid_container.clear()  # Rensa tidigare grid innan vi ritar nytt
+        with self.grid_container:
             with ui.grid(columns=len(x_items) + 1).classes('gap-1 items-center'):
                 ui.label('')
-                customer_map = self.df.set_index(x_col)['customer'].to_dict()
-                # 🔝 HEADER
+                # customer_map = self.df.set_index(x_col)['customer'].to_dict()
+                customer_map = self.df.set_index('job_title')['customer'].to_dict()
+
                 for x_val in x_items:
                     cls = "font-bold text-center w-24 text-xs"
                     if focus_x and x_val == focus_x:
@@ -412,22 +495,28 @@ class ScoreGrid:
                     elif focus_x:
                         cls += " opacity-40"
                     customer_name = customer_map.get(x_val, "Unknown Customer")
-                    # ui.label(str(x_val)).classes(cls).on('click', lambda val=x_val: handle_click(val, x_col))
-                    # ui.label(str(x_val)).on('click', lambda val=x_val: ui.notify(f"Clicked on {x_col}: {val}")).classes(cls)
-                    with ui.label(f'{x_val} - {customer_name}').classes(cls).on('click', lambda val=x_val: self.update(sort_job=val if x_col == 'job_title' else None, sort_candidate=val if x_col == 'candidate_name' else None)):
-                        ui.tooltip(f'Click to sort').classes('text-sm p-2 bg-slate-800 shadow-xl') \
-                # 🔽 ROWS
+                    if not self.flipped and x_col == 'job_title':
+                        label_text = f"{x_val}\n - {customer_name}"
+                    else:
+                        label_text = x_val
+                    with ui.label(label_text).classes(cls).on('click', lambda val=x_val: self.update(sort_job=val if x_col == 'job_title' else None, sort_candidate=val if x_col == 'candidate_name' else None)):
+                        ui.tooltip('Click to sort').classes('text-sm p-2 bg-slate-800 shadow-xl')
+
                 for y_val in y_items:
                     cls = "font-bold w-32 text-right pr-2 text-xs"
                     if focus_y and y_val == focus_y:
                         cls += " ring-2 ring-blue-500 bg-white"
                     elif focus_y:
                         cls += " opacity-40"
-                    ui.label(str(y_val)).classes(cls).on('click', lambda val=y_val: self.update(sort_job=val if y_col == 'job_title' else None, sort_candidate=val if y_col == 'candidate_name' else None))
+                    if self.flipped:
+                        customer_name = customer_map.get(y_val, "Unknown Customer")
+                        label_text = f"{y_val} - {customer_name}"
+                    else:
+                        label_text = y_val
+                    ui.label(label_text).classes(cls).on('click', lambda val=y_val: self.update(sort_job=val if y_col == 'job_title' else None, sort_candidate=val if y_col == 'candidate_name' else None))
 
                     for x_val in x_items:
                         try:
-                            # Här matchar nu y_val (namn) och x_val (id/namn) med pivot-indexet
                             row = pivot.loc[(y_val, x_val)]
                         except KeyError:
                             ui.label('-').classes('w-24 text-center opacity-20')
@@ -442,21 +531,17 @@ class ScoreGrid:
 
                         with ui.card().classes(cell_cls):
                             with ui.element('div').classes('flex w-full h-full'):
-                                # Tooltip logik
                                 cand_name = y_val if not self.flipped else x_val
                                 job_name = x_val if not self.flipped else y_val
-                                
-                                ui.tooltip(f"Candidate: {cand_name}\nJob: {job_name}\n\nCompetence: {row.comp_summary}\n\nAvailability: {row.avail_summary}") \
-                                    .classes('text-xs p-3 bg-slate-800 shadow-xl') \
-                                    .style('white-space: pre-line; max-width: 350px;')
 
-                                with ui.element('div').style(f'background-color: {comp_color}') \
-                                    .classes('flex-1 flex items-center justify-center'):
+                                ui.tooltip(f"Candidate: {cand_name}\nJob: {job_name}\n\nCompetence: {row.comp_summary}\n\nAvailability: {row.avail_summary}").classes('text-xs p-3 bg-slate-800 shadow-xl').style('white-space: pre-line; max-width: 350px;')
+
+                                with ui.element('div').style(f'background-color: {comp_color}').classes('flex-1 flex items-center justify-center'):
                                     ui.label(str(int(row.comp_score))).classes('text-white text-xs font-bold')
 
-                                with ui.element('div').style(f'background-color: {avail_color}') \
-                                    .classes('flex-1 flex items-center justify-center'):
+                                with ui.element('div').style(f'background-color: {avail_color}').classes('flex-1 flex items-center justify-center'):
                                     ui.label(str(int(row.availability_score))).classes('text-black text-xs font-bold')
+
                         
 class MatchGrid:
     def __init__(self, df, mode='candidate'):
@@ -464,32 +549,21 @@ class MatchGrid:
         self.df = df.copy()
         self.mode = mode
         self.container = ui.column().classes('w-full gap-2')
+        self.comb_weight = 50
         self.sort_metric = 'comp_score'
+        self.row_count = 10
+        self.col_count = 3
         self.update_df()
         self.render()
 
     def update_df(self):
         clean_df = self.orig_df.drop_duplicates(subset=['candidate_name', 'job_title'])
         metric = self.sort_metric
-        print("clean_df shape:", clean_df.shape)
-        if self.mode == 'candidate':
-            # 1. Sortera hela skiten först
-            sorted_df = clean_df.sort_values(metric, ascending=False)
-            
-            # 2. Hitta vilka 10 kandidater som har bäst snitt eller bäst topp-match
-            # Detta säkerställer att vi tar de 10 mest relevanta personerna
-            top_10_names = sorted_df.groupby('candidate_name')[metric].max().nlargest(10).index
-            
-            relevant_data = sorted_df[sorted_df['candidate_name'].isin(top_10_names)]
-            
-            # 4. Ta ut de 3 bästa per person från detta urval
-            self.df = relevant_data.groupby('candidate_name').head(3).copy()
-
-        elif self.mode == 'job':
-            sorted_df = clean_df.sort_values(metric, ascending=False)
-            top_10_jobs = sorted_df.groupby('job_title')[metric].max().nlargest(10).index
-            relevant_data = sorted_df[sorted_df['job_title'].isin(top_10_jobs)]
-            self.df = relevant_data.groupby('job_title').head(3).copy()
+        group_col = 'candidate_name' if self.mode == 'candidate' else 'job_title'
+        top_entities_series = clean_df.groupby(group_col)[metric].max().sort_values(ascending=False)
+        self.top_entities_order = top_entities_series.head(self.row_count).index.tolist()
+        relevant_data = clean_df[clean_df[group_col].isin(self.top_entities_order)]
+        self.df = relevant_data.copy()
             
     def update(self, mode=None, sort_metric=None):
         if mode:
@@ -503,52 +577,109 @@ class MatchGrid:
         self.mode = 'job' if self.mode == 'candidate' else 'candidate'
         ui.notify(f"Switched to {'Job' if self.mode == 'job' else 'Candidate'}-focused view", color='primary')
         self.update()
+    
+    def update_comb_score(self, e):
+        self.comb_weight = e.value
+        ui.notify(f"Updating combined score: Comp {e.value}% - Avail {100 - e.value}%", color='primary')
+        comp_part = self.orig_df['comp_score'] * (self.comb_weight / 100)
+        avail_part = self.orig_df['availability_score'] * ((100 - self.comb_weight) / 100)
+        self.orig_df['combined_score'] = round(comp_part + avail_part, 0)
+        self.update_df()
+        if self.sort_metric == 'combined_score':
+            self.render()
+    
+    def update_grid_size(self, rows=None, cols=None):
+        if rows:
+            self.row_count = rows
+        if cols:            
+            self.col_count = cols
+        ui.notify(f"Updating grid size: {rows} rows x {cols} columns", color='primary')
+        self.update_df()
+        self.render()
 
     def render(self):
         self.container.clear()
         
         with self.container:
-            with ui.row().classes('items-end gap-8 mb-6'):
-                with ui.column().classes('gap-1'):
-                    ui.label('Sort metric:').classes('text-[10px] font-bold text-slate-400 uppercase tracking-wider')
-                    ui.radio(['comp_score', 'availability_score', 'combined_score'], 
-                             value=self.sort_metric, 
-                             on_change=lambda e: self.update(sort_metric=e.value)
-                            ).props('dense').classes('text-sm')
-                
-                ui.button('Flip View', icon='swap_horiz', on_click=self.update_mode) \
-                    .props('flat outline dense').classes('mb-1')
+            # --- Kontroller (Header) ---
+            with ui.column().classes('gap-2'):
+                title = "Candidate-Centric Match Grid" if self.mode == 'candidate' else "Job-Centric Match Grid"
+                ui.label(title).classes('text-lg font-bold text-slate-700')
+                ui.label("Grid show the best matches based on the selected metric. Click on Flip View to change perspective.").classes('text-sm text-slate-500 w-full outline outline-1 outline-slate-200 p-2 rounded')
+                with ui.row().classes('items-end gap-8 mb-6'):
+                    
+                    with ui.column().classes('gap-1'):
 
-            grid_cls = 'grid grid-cols-[160px_140px_140px_140px] gap-x-2 gap-y-3 items-center max-w-fit'
+                        ui.label('Sort metric:').classes('text-[10px] font-bold text-slate-400 uppercase tracking-wider')
+                        ui.radio(['comp_score', 'availability_score', 'combined_score'], 
+                                value=self.sort_metric, 
+                                on_change=lambda e: self.update(sort_metric=e.value)
+                                ).props('dense').classes('text-sm')
+                    
+                    ui.button('Flip View', icon='swap_horiz', on_click=self.update_mode) \
+                        .props('flat outline dense').classes('mb-1')
+                    
+                    with ui.column().classes('gap-1'):
+                        ui.label('Combined Score Weight:').classes('text-[12px] font-bold text-slate-400 uppercase tracking-wider')
+                        comp_score_slider = ui.slider(
+                            min=0, max=100, value=self.comb_weight, step=10, 
+                            on_change=self.update_comb_score
+                        ).props('color=blue').classes('w-48')
+                        ui.label().classes('text-xs font-mono w-full').style('white-space: pre-line').bind_text_from(
+                            comp_score_slider, 'value', 
+                            backward=lambda v: f'{int(v)}% Comp\n{100 - int(v)}% Avail'
+                        )
+                    
+                    with ui.column().classes('gap-1'):
+                        option_list = list(range(1, 11))
+                        ui.label('Rows:').classes('text-[10px] font-bold text-slate-400 uppercase')
+                        ui.select(options=option_list, value=self.row_count,
+                                on_change=lambda e: self.update_grid_size(rows=int(e.value))
+                                ).props('dense outlined').classes('w-20')
+                    
+                    with ui.column().classes('gap-1'):
+                        ui.label('Columns (Rank):').classes('text-[10px] font-bold text-slate-400 uppercase')
+                        ui.select([1, 2, 3, 4, 5], value=self.col_count,
+                                on_change=lambda e: self.update_grid_size(cols=int(e.value))
+                                ).props('dense outlined').classes('w-20')
+
+            # --- Dynamisk Grid ---
+            total_cols = self.col_count + 1
+            grid_style = f'grid-template-columns: 160px repeat({self.col_count}, 140px)'
             
-            with ui.element('div').classes(grid_cls):
+            with ui.grid(columns=total_cols).style(grid_style).classes('gap-x-2 gap-y-3 items-center max-w-fit'):
+                # 1. Rubrikrad
                 ui.label(self.mode.capitalize()).classes('font-bold text-slate-400 text-[10px] uppercase pb-2')
-                ui.label('Rank 1').classes('font-bold text-center text-slate-400 text-[10px] uppercase pb-2')
-                ui.label('Rank 2').classes('font-bold text-center text-slate-400 text-[10px] uppercase pb-2')
-                ui.label('Rank 3').classes('font-bold text-center text-slate-400 text-[10px] uppercase pb-2')
+                for i in range(self.col_count):
+                    ui.label(f'Rank {i+1}').classes('font-bold text-center text-slate-400 text-[10px] uppercase pb-2')
 
                 group_col = 'candidate_name' if self.mode == 'candidate' else 'job_title'
                 match_col = 'job_title' if self.mode == 'candidate' else 'candidate_name'
                 
-                unique_entities = sorted(self.df[group_col].unique())
-                
-                
-                for entity in unique_entities:
+                # 2. Datarader
+                for entity in self.top_entities_order:
+                    # Hämta matchningar för just denna person/jobb
                     subset = self.df[self.df[group_col] == entity].copy()
+                    
+                    # Kolumn 1: Namn/Jobb
                     display_name = entity   
-                    if self.mode == 'job':
+                    if self.mode == 'job' and 'customer' in subset.columns:
                         customer = subset['customer'].iloc[0]
                         display_name = f"{entity}\n - {customer}"
+                    
                     with ui.label(display_name).style('white-space: pre-line').classes('font-bold text-slate-700 text-xs truncate pr-4 border-r border-slate-100 h-full flex items-center'):
-                        ui.tooltip(f'Job: {display_name}\n\n').classes('text-sm p-2 bg-slate-800 shadow-xl')
+                        if self.mode == 'job' and 'customer' in subset.columns:
+                            ui.tooltip(f"Job: {entity} - {customer}").classes('text-xs p-2 bg-slate-800 shadow-xl')
                     
-                    top_3 = subset.sort_values(self.sort_metric, ascending=False).head(3)
+                    # Kolumn 2 till N: Matchnings-kort
+                    top_matches = subset.sort_values(self.sort_metric, ascending=False).head(self.col_count)
                     
-                    for i in range(3):
-                        if i < len(top_3):
-                            row = top_3.iloc[i]
+                    for i in range(self.col_count):
+                        if i < len(top_matches):
+                            row = top_matches.iloc[i]
                             self._build_match_card(row, match_col)
                         else:
+                            # Tom placeholder om det saknas matchningar för denna rank
                             ui.element('div').classes('w-32 h-14 rounded border border-dashed border-slate-200 bg-slate-50/50')
 
     def _build_match_card(self, row, match_col):
@@ -561,19 +692,19 @@ class MatchGrid:
                     text = row[match_col]
                     ui.label(text).classes('text-[10px] font-bold truncate text-slate-500')
                 
-                with ui.row().classes('w-full flex-1 gap-0'):
+                with ui.row().classes('w-full h-full flex-1 gap-0'):
                     with ui.element('div').style(f'background-color: {c_color}') \
-                        .classes('flex-1 flex items-center justify-center'):
+                        .classes('flex-1 h-full flex items-center justify-center'):
                         ui.label(str(int(row.comp_score))).classes('text-white text-sm font-bold shadow-sm')
                     
                     with ui.element('div').style(f'background-color: {a_color}') \
-                        .classes('flex-1 flex items-center justify-center'):
+                        .classes('flex-1 h-full flex items-center justify-center'):
                         ui.label(str(int(row.availability_score))).classes('text-slate-900 text-sm font-bold shadow-sm')
 
-            ui.tooltip(f"{row[match_col]}\nJob: {row['job_title']} - {row['customer']}\nComp: {row.comp_summary}\nAvail: {row.avail_summary}") \
+            ui.tooltip(f"Job: {row['job_title']} - {row['customer']}\nComp: {row.comp_summary}\nAvail: {row.avail_summary}") \
                 .classes('text-xs p-2 bg-slate-800 shadow-xl') \
                 .style('white-space: pre-line; max-width: 250px;')
-   
+
     
 
 
@@ -608,28 +739,37 @@ def create_heatmap(df):
 candidates, jobs = generate_test_data(100, 100)
 full_df = generate_scores_df(candidates, jobs)
 
+
+
 all_candidates = full_df['candidate_name'].unique()
 all_jobs = full_df['job_title'].unique()
 
-# Sampla från dessa listor istället
-sampled_candidates = random.sample(list(all_candidates), 10)
-sampled_jobs = random.sample(list(all_jobs), 10)
+sampled_candidates = random.sample(list(all_candidates), 20)
+sampled_jobs = random.sample(list(all_jobs), 20)
 
 sampled_candidates_df = full_df[
     full_df['candidate_name'].isin(sampled_candidates) & 
     full_df['job_title'].isin(sampled_jobs)
 ].copy()
 
-plot_df = full_df.sample(n=500).copy()
+plot_df = full_df.sample(n=1000).copy()
+sampled_candidates_df = sampled_candidates_df.drop_duplicates(subset=['candidate_name', 'job_title'], keep='first')
+    
 plot_df.drop_duplicates(subset=['candidate_name', 'job_title'], keep='first', inplace=True)
 plot_df.reset_index(drop=True, inplace=True)
 plot_df['comp_score'] = plot_df['comp_score'].astype(float)
 plot_df['availability_score'] = plot_df['availability_score'].astype(float)
 match_df = plot_df.copy()
+counts = match_df.groupby('candidate_name').size()
+print(counts[counts < 3].head(20))
 
 @ui.page("/")
 def index():
     chart = None
+    # Skapa en container med begränsad höjd och scrollbar
+    # with ui.scroll_area().classes('w-full h-[500px] border rounded p-4'):
+    # # Lägg ditt Grid här inne
+    #     test_table = ui.table.from_pandas(full_df).classes('w-full')  # Skapa en testtabell för att se datan i början
     plot_table = PlotTable(plot_df)  # Skapa tabellen en gång, den kommer att uppdateras av ChartSection
     # MatchGrid(match_df, mode='candidate')  # Visa kandidat-fokuserad grid först
 
@@ -643,31 +783,30 @@ def index():
             t3 = ui.tab('Table View')
             t4 = ui.tab('Heatmap View')
             
-        with ui.tab_panels(tabs, value=t0).classes('w-full'):
+        with ui.tab_panels(tabs, value=t1).classes('w-full'):
 
             with ui.tab_panel(t0):
                 MatchGrid(match_df, mode='candidate')  # Visa kandidat-fokuserad grid först
             
             with ui.tab_panel(t1):
-                ui.markdown("### Recruiter Dashboard Matrix")
-                filter_test = FilterControl2(on_change=lambda: grid.update() if grid else None)  # Skapa filterkontrollerna
-                filter_test.build()
-                filter_test.set_visible(False)
-                # ScoreGrid(sampled_candidates_df)
+                # filter_test = FilterControl(on_change=lambda: grid.update() if grid else None)  # Skapa filterkontrollerna
+                # filter_test.build()
+                # filter_test.set_visible(False)
+                ScoreGrid(sampled_candidates_df)
             
             with ui.tab_panel(t3):
                 with ui.column().classes('w-full p-6 bg-slate-50 rounded-xl mt-4 border border-slate-200'):
                     ui.markdown("### Detailed Scores Table")
-                    filter_section = FilterControl2(on_change=lambda: chart.update() if chart else None)
+                    filter_section = FilterControl(on_change=lambda: chart.update() if chart else None)
                     filter_section.build()
     
                     filter_section.set_visible(True)  # Visa filterkontrollerna i denna tab
-                    plot_table.render(plot_df)  # Rendera tabellen med den initiala datan
+                    # plot_table.render(plot_df)  # Rendera tabellen med den initiala datan
 
             with ui.tab_panel(t2):
                     filter_section
-                    chart = ChartSection(plot_df, filter_section, plot_table)
-                    chart.build()  # Bygg och rendera grafen i tabben där den ska användas
+                    # chart = ChartSection(plot_df, filter_section, plot_table)
+                    # chart.build()  # Bygg och rendera grafen i tabben där den ska användas
 
             with ui.tab_panel(t4):
                 ui.markdown("### Competence vs Availability Heatmap")
