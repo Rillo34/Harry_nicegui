@@ -55,7 +55,10 @@ def generate_scores_df(candidates: List[str], jobs: List[str]) -> pd.DataFrame:
         for j_id in jobs:
             comp_score = round(random.uniform(1, 100), 0)
             base_avail = random.uniform(80, 100) if project_load == 0 else random.uniform(10, 90)
-            avail_score = max(15, round(base_avail - (project_load * 15), 0))
+            # avail_score = max(15, round(base_avail - (project_load * 15), 0))
+            avail_score = round(base_avail - project_load * 8, 0)
+            avail_score = max(20, min(avail_score, 100))
+
             job = job_registry[j_id]
             competence_phrases_high = [
                 "Exceeds all requirements and demonstrates deep, proven expertise.",
@@ -202,6 +205,7 @@ class ChartSection:
         self.chart = None
 
     def build(self): # Denna anropas i Tab 2
+        
         self.chart = ui.plotly({}).classes('w-full h-[600px]')
         self.update() # Första ritningen
         self.chart.on('plotly_click', self._handle_click)
@@ -209,28 +213,21 @@ class ChartSection:
     def update(self):
         """Filtrerar data och ritar om grafen samt uppdaterar tabellen"""
         f = self.filter_ctrl.filters
-        
         # 1. Filtrera data baserat på värdena i FilterControl
         filtered_df = self.df[
             (self.df['comp_score'] >= f['min_comp']) & 
             (self.df['availability_score'] >= f['min_avail'])
         ].copy()
-
-        # 2. Skapa figuren med Plotly Express
+        filtered_df['job_title'] = filtered_df['job_title'].fillna('').astype(str)
+        filtered_df['customer'] = filtered_df['customer'].fillna('').astype(str)
         fig = px.scatter(
-            filtered_df, 
-            x="comp_score", 
-            y="availability_score", 
+            filtered_df,
+            x="comp_score",
+            y="availability_score",
             color="combined_score",
-            range_x=[-5, 105], 
-            range_y=[-5, 105],
-            size='combined_score',
-            hover_data=['candidate_name', 'job_title', 'customer'],
-            hover_name='candidate_name',
-            template='plotly_white',
-            color_continuous_scale='RdYlBu' # Röd-Gul-Blå skala
+            size="combined_score",
+            hover_data=["candidate_name", "job_title", "customer"],
         )
-
         # 3. Styling av punkterna
         fig.update_traces(
             marker=dict(
@@ -238,8 +235,6 @@ class ChartSection:
                 opacity=0.7, 
                 line=dict(width=1, color='white')
             ),
-            # Skicka med namnet i customdata så klick-eventet kan läsa det enkelt
-            customdata=filtered_df[['candidate_name']].values 
         )
 
         # 4. Lägg till dynamiska hjälplinjer som visar var filtret klipper
@@ -297,7 +292,6 @@ class PlotTable:
             self.df = new_df
             
         if self.table is None:
-            print("Creating table for the first time")
             with ui.column().classes('w-full'):
                 self.count_label = ui.label(f'Antal rader i table: {len(self.df)}').classes('text-sm text-gray-500 mb-2')
                 self.table = ui.table.from_pandas(self.df)
@@ -605,9 +599,9 @@ class MatchGrid:
             with ui.column().classes('gap-2'):
                 title = "Candidate-Centric Match Grid" if self.mode == 'candidate' else "Job-Centric Match Grid"
                 ui.label(title).classes('text-lg font-bold text-slate-700')
-                ui.label("Grid show the best matches based on the selected metric. Click on Flip View to change perspective.").classes('text-sm text-slate-500 w-full outline outline-1 outline-slate-200 p-2 rounded')
+                ui.label("Automatic sorting in grid. Click on Flip View to change perspective job/candidate.").classes('text-sm text-slate-500 w-full outline outline-1 outline-slate-200 p-2 rounded')
                 with ui.row().classes('items-end gap-8 mb-6'):
-                    
+                
                     with ui.column().classes('gap-1'):
 
                         ui.label('Sort metric:').classes('text-[10px] font-bold text-slate-400 uppercase tracking-wider')
@@ -719,61 +713,61 @@ def create_heatmap(df):
     )
 
     # 2. Rita Heatmap
-    fig = px.imshow(
-        heatmap_data,
-        labels=dict(x="Job Title", y="Candidate", color="Match Score"),
-        x=heatmap_data.columns,
-        y=heatmap_data.index,
-        color_continuous_scale='RdYlBu', # Rött (dåligt) till Blått (bra)
-        aspect="auto" # Gör att den fyller ut containern snyggt
+    # fig = px.imshow(
+    #     heatmap_data,
+    #     labels=dict(x="Job Title", y="Candidate", color="Match Score"),
+    #     x=heatmap_data.columns,
+    #     y=heatmap_data.index,
+    #     # hover_data={'combined_score': heatmap_data.values},
+    #     hover_data=["candidate_name", "job_title", "customer"],
+    #     color_continuous_scale='RdYlBu', # Rött (dåligt) till Blått (bra)
+    #     aspect="auto" # Gör att den fyller ut containern snyggt
+    # )
+    fig = px.density_heatmap(
+        df,
+        x="job_title",
+        y="candidate_name",
+        z="combined_score",
+        histfunc="avg",
+        color_continuous_scale='RdYlBu',
+        hover_data=["customer"]
     )
-
     fig.update_layout(
         title="Overall Match Matrix",
         xaxis_nticks=36, # Visar inte för många etiketter om det är trångt
         yaxis_nticks=36
     )
-    
     return fig
 
 candidates, jobs = generate_test_data(100, 100)
 full_df = generate_scores_df(candidates, jobs)
-
-
-
 all_candidates = full_df['candidate_name'].unique()
 all_jobs = full_df['job_title'].unique()
 
-sampled_candidates = random.sample(list(all_candidates), 20)
-sampled_jobs = random.sample(list(all_jobs), 20)
+sampled_candidates = random.sample(list(all_candidates), 10)
+sampled_jobs = random.sample(list(all_jobs), 10)
 
 sampled_candidates_df = full_df[
     full_df['candidate_name'].isin(sampled_candidates) & 
     full_df['job_title'].isin(sampled_jobs)
 ].copy()
 
-plot_df = full_df.sample(n=1000).copy()
-sampled_candidates_df = sampled_candidates_df.drop_duplicates(subset=['candidate_name', 'job_title'], keep='first')
-    
+plot_df = full_df.sample(n=100).copy()
+sampled_candidates_df = sampled_candidates_df.drop_duplicates(subset=['candidate_name', 'job_title'], keep='first')    
 plot_df.drop_duplicates(subset=['candidate_name', 'job_title'], keep='first', inplace=True)
 plot_df.reset_index(drop=True, inplace=True)
 plot_df['comp_score'] = plot_df['comp_score'].astype(float)
 plot_df['availability_score'] = plot_df['availability_score'].astype(float)
-match_df = plot_df.copy()
+# match_df = plot_df.copy()
+match_df = full_df.copy()
 counts = match_df.groupby('candidate_name').size()
 print(counts[counts < 3].head(20))
 
 @ui.page("/")
 def index():
     chart = None
-    # Skapa en container med begränsad höjd och scrollbar
-    # with ui.scroll_area().classes('w-full h-[500px] border rounded p-4'):
-    # # Lägg ditt Grid här inne
-    #     test_table = ui.table.from_pandas(full_df).classes('w-full')  # Skapa en testtabell för att se datan i början
     plot_table = PlotTable(plot_df)  # Skapa tabellen en gång, den kommer att uppdateras av ChartSection
-    # MatchGrid(match_df, mode='candidate')  # Visa kandidat-fokuserad grid först
-
-
+    detailed_table = PlotTable(plot_df)  # En extra tabell för att visa detaljerad data i Tab 3
     with ui.column().classes('w-full'):
 
         with ui.tabs() as tabs:
@@ -793,29 +787,60 @@ def index():
                 # filter_test.build()
                 # filter_test.set_visible(False)
                 ScoreGrid(sampled_candidates_df)
+            with ui.tab_panel(t2):
+                    title = "Plot with connected table" 
+                    ui.label(title).classes('text-lg font-bold text-slate-700')
+                    with ui.row().classes('w-full items-center gap-4 mb-4'):
+                        ui.label("Use the filters to adjust the plot:").classes('text-sm text-slate-500')
+                        filter_section = FilterControl(on_change=lambda: chart.update() if chart else None)
+                        filter_section.build()
+                    chart = ChartSection(plot_df, filter_section, plot_table)
+                    chart.build()  # Bygg och rendera grafen i tabben där den ska användas
             
             with ui.tab_panel(t3):
                 with ui.column().classes('w-full p-6 bg-slate-50 rounded-xl mt-4 border border-slate-200'):
-                    ui.markdown("### Detailed Scores Table")
-                    filter_section = FilterControl(on_change=lambda: chart.update() if chart else None)
-                    filter_section.build()
-    
-                    filter_section.set_visible(True)  # Visa filterkontrollerna i denna tab
+                    def on_filter_change():
+                        if detailed_table:
+                            f = filter.filters
+                            filtered_df = plot_df[
+                                (plot_df['comp_score'] >= f['min_comp']) & 
+                                (plot_df['availability_score'] >= f['min_avail'])
+                            ]
+                            detailed_table.render(filtered_df)
+                    filter = FilterControl(on_change=on_filter_change)
+                    filter.build()
+                    detailed_table.render(plot_df)  # Rendera tabellen med den initiala datan
+                    # filter_section.set_visible(True)  # Visa filterkontrollerna i denna tab
                     # plot_table.render(plot_df)  # Rendera tabellen med den initiala datan
 
-            with ui.tab_panel(t2):
-                    filter_section
-                    # chart = ChartSection(plot_df, filter_section, plot_table)
-                    # chart.build()  # Bygg och rendera grafen i tabben där den ska användas
-
+            
             with ui.tab_panel(t4):
-                ui.markdown("### Competence vs Availability Heatmap")
-                # Heatmapen skapas direkt här
-                heatmap_fig = create_heatmap(plot_table.df)  # Använd den data som är i tabellen (kan vara filtrerad)
-                ui.plotly(heatmap_fig).classes('w-full h-[700px] bg-white rounded-lg shadow-sm border border-slate-100')
+                title = "Heatmap of Competence vs Availability for Sampled Candidates and Jobs" 
+                ui.label(title).classes('text-lg font-bold text-slate-700')                
+                def update_comb_score():
+                    heatmap_container.clear()
+                    filtered_df = sampled_candidates_df.copy()
+                    filtered_df['combined_score'] = round(
+                        sampled_candidates_df['comp_score'] * comb_weight_slider.value / 100) + sampled_candidates_df['availability_score'] * ((100 - comb_weight_slider.value  ) / 100)  
+                    with heatmap_container:
+                        heatmap_fig = create_heatmap(filtered_df)
+                        ui.plotly(heatmap_fig).classes('w-full h-[700px] bg-white rounded-lg shadow-sm border border-slate-100')
+                comb_weight_slider = ui.slider(
+                    min=0, max=100, value=50, step=10, 
+                    on_change=update_comb_score
+                ).props('color=blue').classes('w-48')
+                ui.label().classes('text-xs font-mono w-full').style('white-space: pre-line').bind_text_from(
+                    comb_weight_slider, 'value', 
+                    backward=lambda v: f'{int(v)}% Comp\n{100 - int(v)}% Avail'
+                )
+                heatmap_fig = create_heatmap(sampled_candidates_df)  # Använd den data som är i tabellen (kan vara filtrerad)
+                with ui.column().classes('w-full h-[700px] bg-white rounded-lg shadow-sm border border-slate-100') as heatmap_container:
+                    ui.plotly(heatmap_fig).classes('w-full h-full')
+                    # heatmap_container.style('overflow: auto')  # Lägg till scroll om det
 
 # Se till att ui.run ligger längst ner utanför alla funktioner
-ui.run(port=8007, title="Recruiter AI Dashboard")
+if __name__ in {"__main__", "__mp_main__"}:
+    ui.run(port=8007, title="Recruiter AI Dashboard")
     
 
 
