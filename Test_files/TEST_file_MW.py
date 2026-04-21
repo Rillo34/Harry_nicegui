@@ -1,3 +1,4 @@
+from tkinter import dialog
 from nicegui import ui
 import random
 from faker import Faker
@@ -5,6 +6,98 @@ from numpy import diff
 import pandas as pd
 from typing import List
 from pandas import DataFrame
+from datetime import datetime, timedelta
+
+
+#------------------
+# FUNCTIONS GENERAL
+#------------------
+
+def generate_test_data(n_candidates: int, n_jobs: int):
+    fake = Faker("sv_SE")
+    start_date = pd.to_datetime("2025-10-01")
+    end_date = pd.to_datetime("2026-12-31")
+    today = datetime.today()
+    candidates = [
+        {"cand_id": f"cand_{i+1:04d}", "cand_name": fake.name(), "last_assignment_date": fake.date_between_dates(date_start=start_date, date_end=end_date)}
+        for i in range(n_candidates)
+    ]
+
+    # IT-jobb
+    it_roles = [
+        "Backend Developer", "Frontend Developer", "Fullstack Developer",
+        "DevOps Engineer", "Cloud Engineer", "Data Engineer",
+        "QA Engineer", "IT Support Technician", "UX/UI Designer"
+    ]
+    it_customers_pool = [
+        "Spotify", "Klarna", "Ericsson", "Volvo Cars", "IKEA Digital",
+        "H&M Group Tech", "King", "Telia", "SEB", "Nordea",
+        "Scania IT", "Tink", "Sinch", "Voi", "Blocket",
+        "Skatteverket IT", "Försäkringskassan IT", "Polisen IT"
+    ]
+    jobs =[]
+    for i in range(n_jobs):
+        received_date = today - timedelta(days=random.randint(0, 10))
+        due_date = today + timedelta(days=random.randint(0, 14))
+
+        jobs.append({
+            "job_id": f"job_{i+1:03d}",
+            "title": fake.random_element(it_roles),
+            "customer": fake.random_element(it_customers_pool),
+            "received_date": received_date.strftime('%Y-%m-%d'),
+            "due_date": due_date.strftime('%Y-%m-%d'),
+        })
+    return candidates, jobs
+
+def generate_scores_df(candidates: list[dict], jobs: list[dict], nr_rows: int) -> pd.DataFrame:
+    rows = []
+    used = set()  # (cand_id, job_id)
+    while len(rows) < nr_rows:
+        cand = random.choice(candidates)
+        job = random.choice(jobs)
+        key = (cand["cand_id"], job["job_id"])
+        if key in used:
+            continue  # hoppa över dublett
+        used.add(key)
+        comp_score = random.randint(20, 100)
+        avail_score = random.randint(20, 100)
+        rows.append({
+            "cand_name": cand["cand_name"],
+            "job_title": job["title"],
+            "customer": job["customer"],
+            "received_date": job["received_date"],
+            "due_date": job["due_date"],
+            "comp_score": comp_score,
+            "avail_score": avail_score,
+            "combined_score": round((comp_score * 0.5) + (avail_score * 0.5), 0),
+            "last_assignment_date": cand["last_assignment_date"],
+            "cand_id": cand["cand_id"],
+            "job_id": job["job_id"],
+            "cv_sent": False,
+            "cv_sent_by": "",
+            "cv_sent_at": "",
+            "id": f"{cand['cand_id']}_{job['job_id']}"
+        })
+        df = pd.DataFrame(rows)
+        df['due_date'] = pd.to_datetime(df['due_date'])
+        today = datetime.today().date()
+        df['days_left'] = (df['due_date'] - pd.Timestamp(today)).dt.days
+        df['due_date'] = df['due_date'].dt.strftime('%Y-%m-%d')
+    return df
+
+def handle_status_change(e, row):  # NOT USED NOW
+    ui.notify(f'Status ändrad för rad {row["id"]}: {e.value}')
+    # row['status'] = e.value   # om du vill uppdatera direkt
+
+def open_popup(row): # NOT USED NOW
+    with ui.dialog() as dialog, ui.card():
+        ui.label(f'Redigerar rad {row["id"]} - {row["name"]}').classes('text-lg')
+        ui.input('Namn').bind_value(row, 'name')
+        ui.select(['Aktiv', 'Inaktiv', 'Väntar'], label='Status').bind_value(row, 'status')
+        ui.button('Spara', on_click=dialog.close).classes('mt-4')
+    dialog.open()
+
+
 
 # --------------------------
 # CLASSES
@@ -80,6 +173,7 @@ class CandidateTable:
         # self.df = data.copy()  # behåll originaldata för att kunna återställa efter filter
         self.df = data.copy().reset_index(drop=True)
         self.table = None
+        self.user = "Rickard"  # hårdkodad användare för test, i verklig app skulle detta komma från inloggning
         self.table_container = None
         self.minimum_match_filter = 50
         self.minimum_overall_filter = 50
@@ -102,31 +196,17 @@ class CandidateTable:
             with ui.row().classes('w-full'):
                 rows = df.to_dict(orient='records')
                 self.table = ui.table(
-                    columns=[
+                    columns = [
                         {'name': 'cand_name', 'label': 'Candidate', 'field': 'cand_name', 'sortable': True},
                         {'name': 'job_title', 'label': 'Job Title', 'field': 'job_title', 'sortable': True},
                         {'name': 'customer', 'label': 'Customer', 'field': 'customer', 'sortable': True},
+                        {'name': 'days_left', 'label': 'Due in days', 'field': 'days_left', 'sortable': True},
                         {'name': 'comp_score', 'label': 'Match Rating', 'field': 'comp_score', 'sortable': True},
                         {'name': 'combined_score', 'label': 'Overall Rating', 'field': 'combined_score', 'sortable': True},
-                        {
-                            'name': 'availability',
-                            'label': 'Availability',
-                            'field': 'weeks_since_last_assignment',
-                            'sortable': True,
-                            
-                        },
-                        {   'name': 'weeks_since_last_assignment',
-                            'label': 'Weeks since assignment',
-                            'field': 'weeks_since_last_assignment',
-                            'sortable': True,
-                            'visible': False
-                        },
-                        {
-                            'name': 'months_since_last_assignment',
-                            'label': 'Months since assignment',
-                            'field': 'months_since_last_assignment',
-                            'sortable': True,
-                        },
+                        {'name': 'availability', 'label': 'Availability', 'field': 'weeks_since_last_assignment', 'sortable': True},
+                        {'name': 'weeks_since_last_assignment', 'label': 'Weeks since assignment', 'field': 'weeks_since_last_assignment', 'sortable': True, 'visible': False},
+                        {'name': 'months_since_last_assignment', 'label': 'Months since assignment', 'field': 'months_since_last_assignment', 'sortable': True},
+                        {'name': 'cv_sent', 'label': 'CV Sent', 'field': 'cv_sent', 'sortable': True}
                     ],
                     rows=rows,
                     row_key='row_id',
@@ -171,7 +251,40 @@ class CandidateTable:
                 {{ props.row.cand_name }}
             </q-td>
         ''')
+        self.table.add_slot('body-cell-cv_sent', '''
+            <q-td :props="props" class="cursor-pointer"
+                @click="$parent.$emit('cv-click', props.row)">
+                
+                <q-icon 
+                    :name="props.row.cv_sent ? 'check_circle' : 'radio_button_unchecked'"
+                    :color="props.row.cv_sent ? 'green' : 'grey'"
+                    :size="props.row.cv_sent ? '20px' : '20px'">
+                    
+                    <q-tooltip v-if="props.row.cv_sent" class="text-lg q-pa-md">
+                        Sent by: {{ props.row.cv_sent_by }}<br>
+                        At: {{ props.row.cv_sent_at }}
+                    </q-tooltip>
+                </q-icon>
+
+            </q-td>
+        ''')
+        self.table.add_slot('body-cell-days_left', '''
+            <q-td :props="props" class="text-right">
+                <q-badge
+                :color="props.row.days_left <= 2 ? 'red' :
+                        props.row.days_left <= 6 ? 'orange' : 'grey-7'"
+                text-color="white"
+                style="font-weight:700; font-size:13px; min-width:40px;
+                        display:inline-flex; justify-content:center;"
+                >
+                {{ props.row.days_left }}
+                </q-badge>
+            </q-td>
+            ''')
+
+
         self.table.on('name_click', self.name_click)
+        self.table.on('cv-click', self.cv_click)
 
     def on_change_match(self, e):
         min_match = e.args
@@ -206,15 +319,42 @@ class CandidateTable:
 
     def name_click(self, e):
         ui.notify(f'Klickade på kandidat: {e.args["cand_name"]}, id: {e.args["cand_id"]}')
-        cand_df = self.df[self.df['cand_id'] == e.args['cand_id']]
-        print((f"Kandidat: {e.args['cand_name']}"))
-        print (cand_df.to_string(index=False))  # skriv ut all info om kandidaten i konsolen
-        with ui.card():
-            cand_table = CandidatePopup(cand_df)
-            cand_table.build()
+        cand_df = self.filtered_df[self.filtered_df['cand_id'] == e.args['cand_id']]
+        with ui.dialog() as dialog, ui.card().classes("w-auto max-w-none"):
+            with ui.column().classes("min-w-max"):
+                ui.label(f'Filtered jobs for {e.args["cand_name"]}').classes("text-xl font-bold mb-2")
+                cand_table = CandidateTable(cand_df)
+                cand_table.build()
+                ui.button("Close", on_click=dialog.close)
+                dialog.open()
 
-        # ui.dialog(f'Kandidat: {e.args["cand_name"]}').open()
-        # Här kan du lägga till mer avancerad logik, t.ex. öppna en popup med mer info
+    def cv_click(self, e):
+        ui.notify(f"CV click: {e.args['cand_name']}")
+        print (f"CV click event args: {e.args}")    
+        with ui.dialog() as dialog, ui.card().classes("w-[400px] p-4"):
+            ui.label(f"CV sent for {e.args['cand_name']}").classes("text-lg font-bold mb-4")
+            sent_checkbox = ui.checkbox("CV sent", value=e.args["cv_sent"])
+            if sent_checkbox.value:
+                sent_by = ui.input("Sent by", value=e.args.get("cv_sent_by", ""))
+                sent_at = ui.input("Sent at", value=e.args.get("cv_sent_at", ""))
+            else:
+                sent_by = ui.input("Sent by", value=self.user)
+                sent_at = ui.input("Sent at", value=pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"))
+
+            def save():
+                rid = e.args["id"]
+                self.filtered_df.loc[self.filtered_df["id"] == rid, "cv_sent"] = sent_checkbox.value
+                self.filtered_df.loc[self.filtered_df["id"] == rid, "cv_sent_by"] = sent_by.value
+                self.filtered_df.loc[self.filtered_df["id"] == rid, "cv_sent_at"] = sent_at.value
+
+                self.update(self.filtered_df)
+                dialog.close()
+
+            ui.button("Save", on_click=save)
+            ui.button("Cancel", on_click=dialog.close).props("flat")
+
+        dialog.open()
+
 
     def apply_filters(self):
         min_match = self.minimum_match_filter
@@ -258,7 +398,6 @@ class CandidateTable:
             weeks_since_last_assignment = (pd.Timestamp.today() - end_of_last_assignment).days // 7
             time_to_available = (end_of_last_assignment-pd.Timestamp.today()).days
             available_in_weeks = -int(time_to_available // 7)
-            print (f"Candidate: {row['cand_name']}, Last Assignment End: {end_of_last_assignment.date()}, Time to Available: {time_to_available} days")
             if time_to_available < 0:
                 self.df.at[idx, 'availability'] = "NOW"
             else:
@@ -270,82 +409,9 @@ class CandidateTable:
             self.df.at[idx, 'color_code'] = assign_color_code(available_in_weeks)
 
 
-
-def generate_test_data(n_candidates: int, n_jobs: int):
-    fake = Faker("sv_SE")
-    start_date = pd.to_datetime("2025-10-01")
-    end_date = pd.to_datetime("2026-12-31")
-    candidates = [
-        {"cand_id": f"cand_{i+1:04d}", "cand_name": fake.name(), "last_assignment_date": fake.date_between_dates(date_start=start_date, date_end=end_date)}
-        for i in range(n_candidates)
-    ]
-
-    # IT-jobb
-    it_roles = [
-        "Backend Developer", "Frontend Developer", "Fullstack Developer",
-        "DevOps Engineer", "Cloud Engineer", "Data Engineer",
-        "QA Engineer", "IT Support Technician", "UX/UI Designer"
-    ]
-    it_customers_pool = [
-        "Spotify", "Klarna", "Ericsson", "Volvo Cars", "IKEA Digital",
-        "H&M Group Tech", "King", "Telia", "SEB", "Nordea",
-        "Scania IT", "Tink", "Sinch", "Voi", "Blocket",
-        "Skatteverket IT", "Försäkringskassan IT", "Polisen IT"
-    ]
-    jobs = [
-        {"job_id": f"job_{i+1:03d}", "title": fake.random_element(it_roles), "customer": fake.random_element(it_customers_pool)}
-        for i in range(n_jobs)
-    ]
-    return candidates, jobs
-
-def generate_scores_df(candidates: list[dict], jobs: list[dict], nr_rows: int) -> pd.DataFrame:
-    rows = []
-    used = set()  # (cand_id, job_id)
-    while len(rows) < nr_rows:
-        cand = random.choice(candidates)
-        job = random.choice(jobs)
-        key = (cand["cand_id"], job["job_id"])
-        if key in used:
-            continue  # hoppa över dublett
-        used.add(key)
-        comp_score = random.randint(20, 100)
-        avail_score = random.randint(20, 100)
-        rows.append({
-            "cand_name": cand["cand_name"],
-            "job_title": job["title"],
-            "customer": job["customer"],
-            "comp_score": comp_score,
-            "avail_score": avail_score,
-            "combined_score": round((comp_score * 0.5) + (avail_score * 0.5), 0),
-            "last_assignment_date": cand["last_assignment_date"],
-            "cand_id": cand["cand_id"],
-            "job_id": job["job_id"]
-        })
-
-    return pd.DataFrame(rows)
-
-    
-
-
-
 candidates, jobs = generate_test_data(10, 10)
 df = generate_scores_df(candidates, jobs, 100)
-print("OLD df:")
-print(df)
-
-def handle_status_change(e, row):
-    ui.notify(f'Status ändrad för rad {row["id"]}: {e.value}')
-    # row['status'] = e.value   # om du vill uppdatera direkt
-
-def open_popup(row):
-    with ui.dialog() as dialog, ui.card():
-        ui.label(f'Redigerar rad {row["id"]} - {row["name"]}').classes('text-lg')
-        ui.input('Namn').bind_value(row, 'name')
-        ui.select(['Aktiv', 'Inaktiv', 'Väntar'], label='Status').bind_value(row, 'status')
-        ui.button('Spara', on_click=dialog.close).classes('mt-4')
-    dialog.open()
-
-
+print (df.head())
 
 @ui.page('/')
 def main_page():
@@ -353,98 +419,18 @@ def main_page():
         new_candidates, new_jobs = generate_test_data(10, 10)
         new_df = generate_scores_df(new_candidates, new_jobs, 100)
         candidate_table.update(new_df)
-    ui.label('Kandidater för IT-jobb').classes('text-2xl font-bold mb-4')
+    ui.label('Candidates for IT jobs').classes('text-2xl font-bold mb-4')
     candidate_table = CandidateTable(df)
-
     callbacks = {
         'match': candidate_table.on_change_match,
         'overall': candidate_table.on_change_overall,
         'reset': candidate_table.reset_filters
     }
-
     filter_control = FilterControl(on_change=callbacks)
     filter_control.build()
     with ui.row():    
         ui.button('New data', on_click=update_table)
+        ui.label('There are 100 rows in the table, take filter to ZERO to see all').classes('text-sm text-slate-500')
     candidate_table.build()
     
-
-
 ui.run(port = 8005)
-
-# def open_popup_name(row):
-#     # Filtrera rader baserat på name
-#     clicked_name = row["name"]
-#     new_rows = [r for r in table.rows if r["name"] == row["name"]]
-#     with ui.card():
-#         ui.label(f'Visar rader för {clicked_name}')
-#         table.rows = new_rows
-#         table.update()
-
-               
-
-# ==================== SLOTS (lägg till dina interaktiva celler här) ====================
-
-# Exempel: Select i Status-kolumnen
-# table.add_slot('body-cell-status', '''
-#     <q-td :props="props">
-#         <q-select
-#             v-model="props.row.status"
-#             :options="['Aktiv', 'Inaktiv', 'Väntar', 'Klar', 'Fel']"
-#             dense
-#             outlined
-#             style="min-width: 130px"
-#             @update:model-value="() => $parent.$emit('status_changed', props.row)"
-#         />
-#     </q-td>
-# ''')
-
-# table.add_slot('body-cell-name', '''
-#     <q-td :props="props" class="cursor-pointer"
-#           @click="$parent.$emit('name_clicked', props.row)">
-#         {{ props.row.name }}
-#     </q-td>
-# ''')
-
-
-# table.on('status_changed', lambda e: handle_status_change(e.args, e.args))   # e.args är hela raden
-
-# # Exempel: Färg som badge + möjlighet att ändra
-
-
-# # Exempel: Knapp som öppnar popup
-# table.add_slot('body-cell-action', '''
-#     <q-td :props="props" class="text-center">
-#         <q-btn
-#             icon="edit"
-#             flat
-#             dense
-#             color="primary"
-#             @click="$parent.$emit('edit_clicked', props.row)"
-#         />
-#     </q-td>
-# ''')
-# table.add_slot('body-cell-priority', '''
-#     <q-td :props="props" class="text-center">
-#         <div
-#             :style="{
-#                 'background-color':
-#                     props.row.priority === 'Låg' ? '#b6f7b0' :
-#                     props.row.priority === 'Medel' ? '#fff3a3' :
-#                     props.row.priority === 'Hög' ? '#ffb3b3' :
-#                     props.row.priority === 'Kritisk' ? '#ff4d4d' :
-#                     'white',
-#                 'padding': '6px',
-#                 'border-radius': '6px',
-#                 'font-weight': 'bold'
-#             }"
-#         >
-#             {{ props.row.priority }}
-#         </div>
-#     </q-td>
-# ''')
-
-
-# table.on('edit_clicked', lambda e: open_popup(e.args))
-# table.on('name_clicked', lambda e: open_popup_name(e.args))
-

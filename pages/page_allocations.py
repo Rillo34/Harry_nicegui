@@ -241,7 +241,6 @@ async def allocations_page():
                 DataTable(contract_handler.working_hours_df)
 
             with ui.tab_panel(abscence_tab):
-                ui.button()
                 AbsenceTable(
                     name_list=absence_handler.candidate_name_list,
                     month_cols=allocation_handler.month_list,
